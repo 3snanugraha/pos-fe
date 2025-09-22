@@ -7,6 +7,7 @@ import BannerSlider from '../components/BannerSlider';
 import { fetchBanners, fetchProducts, fetchProductCategories, Banner, Product, ProductCategory } from '../services/api';
 import { verifyToken } from '../services/auth';
 import { handleAuthError, getErrorMessage } from '../utils/auth';
+import { useCart } from '../contexts/CartContext';
 
 const HomeScreen = () => {
   const [banners, setBanners] = useState<Banner[]>([]);
@@ -15,6 +16,7 @@ const HomeScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { itemCount } = useCart();
   const router = useRouter();
 
   // Icon mapping untuk kategori
@@ -121,8 +123,22 @@ const HomeScreen = () => {
             <Text className="text-white text-2xl font-bold">Pelanggan</Text>
           </View>
           <View className="flex-row space-x-4">
-            <Ionicons name="notifications-outline" size={24} color="white" />
-            <Ionicons name="cart-outline" size={24} color="white" />
+            <Pressable onPress={() => router.push('/notifications')}>
+              <Ionicons name="notifications-outline" size={24} color="white" />
+            </Pressable>
+            <Pressable 
+              onPress={() => router.push('/(tabs)/cart')}
+              className="relative"
+            >
+              <Ionicons name="cart-outline" size={24} color="white" />
+              {itemCount > 0 && (
+                <View className="absolute -top-2 -right-2 bg-red-500 rounded-full min-w-[20px] h-5 items-center justify-center">
+                  <Text className="text-white text-xs font-bold">
+                    {itemCount > 99 ? '99+' : itemCount}
+                  </Text>
+                </View>
+              )}
+            </Pressable>
           </View>
         </View>
       </View>
@@ -214,6 +230,7 @@ const HomeScreen = () => {
                   key={product.id} 
                   className="bg-white rounded-xl p-3 mr-3"
                   style={{ width: 160 }}
+                  onPress={() => router.push(`/product/${product.id}`)}
                 >
                   <View className="bg-gray-200 h-32 rounded-lg mb-2 overflow-hidden">
                     {product.gambar_url ? (

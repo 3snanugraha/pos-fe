@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { getToken, logout } from './auth';
 
-const API_URL = 'http://192.168.1.3:8000/api/';
+const API_URL = 'http://10.215.191.61:8000/api';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -147,11 +147,12 @@ const makeAuthenticatedRequest = async (url: string, options: RequestInit = {}) 
   };
 
   const fullUrl = `${API_URL}${url}`;
+  
   const response = await fetch(fullUrl, {
     ...options,
     headers,
   });
-
+  
   if (!response.ok) {
     if (response.status === 401) {
       // Token expired, handle logout and redirect

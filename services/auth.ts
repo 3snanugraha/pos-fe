@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://192.168.1.3:8000/api';
+const API_URL = 'http://10.215.191.61:8000/api';
 
 // Demo mode for development when server is not available
 const DEMO_MODE = false; // Set to true to enable demo mode

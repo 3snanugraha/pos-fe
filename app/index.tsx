@@ -31,6 +31,7 @@ export default function LoadingScreen() {
     ]).start();
 
     initializeApp();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const initializeApp = async () => {

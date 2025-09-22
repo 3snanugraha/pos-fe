@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { View, Text, ScrollView, FlatList, RefreshControl, Pressable, Image } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import Navbar from '../components/Navbar';
 import { fetchProducts, fetchProductCategories, Product, ProductCategory } from '../services/api';
 import { verifyToken } from '../services/auth';
@@ -10,6 +10,7 @@ import { handleAuthError, getErrorMessage } from '../utils/auth';
 
 const ProductsScreen = () => {
   const params = useLocalSearchParams();
+  const router = useRouter();
   const initialCategoryId = params.categoryId ? parseInt(params.categoryId as string) : null;
   
   const [products, setProducts] = useState<Product[]>([]);
@@ -88,12 +89,20 @@ const ProductsScreen = () => {
     loadData();
   }, [loadData]);
 
-  const formatPrice = (price: number) => {
+  const formatPrice = (price: number | string | null | undefined) => {
+    // Konversi ke number dan handle edge cases
+    const numPrice = price ? Number(price) : 0;
+    
+    // Jika masih NaN setelah konversi, return fallback
+    if (isNaN(numPrice)) {
+      return 'Harga tidak tersedia';
+    }
+    
     return new Intl.NumberFormat('id-ID', {
       style: 'currency',
       currency: 'IDR',
       minimumFractionDigits: 0,
-    }).format(price);
+    }).format(numPrice);
   };
 
   return (
@@ -102,7 +111,9 @@ const ProductsScreen = () => {
         title="Produk" 
         showLogo={true}
         rightAction={
-          <Ionicons name="search-outline" size={24} color="white" />
+          <Pressable onPress={() => router.push('/search')}>
+            <Ionicons name="search-outline" size={24} color="white" />
+          </Pressable>
         }
       />
       
@@ -174,7 +185,10 @@ const ProductsScreen = () => {
                 <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
               }
               renderItem={({ item }) => (
-                <Pressable className="bg-white rounded-xl p-3 w-[48%] mb-4 shadow-sm">
+                <Pressable 
+                  className="bg-white rounded-xl p-3 w-[48%] mb-4 shadow-sm"
+                  onPress={() => router.push(`/product/${item.id}`)}
+                >
                   <View className="bg-gray-200 h-32 rounded-lg mb-2 overflow-hidden">
                     <Image
                       source={{ 
@@ -193,7 +207,7 @@ const ProductsScreen = () => {
                     {formatPrice(item.harga)}
                   </Text>
                   <View className="flex-row justify-between items-center mt-2">
-                    <Text className="text-xs text-gray-500">Stok: {item.stok}</Text>
+                    <Text className="text-xs text-gray-500">Stok: {Number(item.stok) || 0}</Text>
                     <Pressable className="bg-primary px-2 py-1 rounded">
                       <Text className="text-white text-xs">+</Text>
                     </Pressable>

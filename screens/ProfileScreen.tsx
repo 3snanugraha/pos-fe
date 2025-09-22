@@ -20,8 +20,15 @@ const ProfileScreen = () => {
       icon: 'receipt-outline',
       description: 'Lihat riwayat pesanan Anda',
       action: () => {
-        // Navigate to orders
-        // console.log('Navigate to orders');
+        router.push('/orders');
+      }
+    },
+    { 
+      title: 'Wishlist', 
+      icon: 'heart-outline',
+      description: 'Produk favorit Anda',
+      action: () => {
+        router.push('/wishlist');
       }
     },
     { 
@@ -29,8 +36,7 @@ const ProfileScreen = () => {
       icon: 'location-outline',
       description: 'Kelola alamat pengiriman Anda',
       action: () => {
-        // Navigate to addresses
-        // console.log('Navigate to addresses');
+        router.push('/addresses');
       }
     },
     { 
@@ -120,7 +126,7 @@ const ProfileScreen = () => {
   };
 
   const handleEditProfile = () => {
-    Alert.alert('Info', 'Fitur edit profil akan segera tersedia');
+    router.push('/profile/edit');
   };
 
   useEffect(() => {

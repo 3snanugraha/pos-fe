@@ -3,6 +3,8 @@ import { StatusBar } from 'react-native';
 import { Stack } from 'expo-router';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
+import { CartProvider } from '../contexts/CartContext';
+import ErrorBoundary from '../components/ErrorBoundary';
 import "../global.css";
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -24,17 +26,19 @@ export default function RootLayout() {
   }
 
   return (
-    <>
-      <StatusBar 
-        barStyle="light-content" 
-        backgroundColor="#1E40AF" 
-        translucent={false}
-      />
-      <Stack screenOptions={{
-        headerShown: false,
-        contentStyle: { backgroundColor: '#F3F4F6' },
-        animation: 'slide_from_right',
-      }} />
-    </>
+    <ErrorBoundary>
+      <CartProvider>
+        <StatusBar 
+          barStyle="light-content" 
+          backgroundColor="#1E40AF" 
+          translucent={false}
+        />
+        <Stack screenOptions={{
+          headerShown: false,
+          contentStyle: { backgroundColor: '#F3F4F6' },
+          animation: 'slide_from_right',
+        }} />
+      </CartProvider>
+    </ErrorBoundary>
   );
 }
