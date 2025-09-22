@@ -1,7 +1,7 @@
 import { router } from 'expo-router';
 import { getToken, logout } from './auth';
 
-const API_URL = 'http://10.215.191.61:8000/api';
+const API_URL = 'http://192.168.100.36:8000/api';
 
 interface ApiResponse<T> {
   success: boolean;
@@ -21,7 +21,7 @@ export interface Banner {
   deskripsi: string;
   gambar_url: string;
   link_tujuan: string;
-  status: 'aktif' | 'nonaktif';
+  status?: 'aktif' | 'nonaktif';
 }
 
 export interface PaymentMethod {
@@ -30,7 +30,7 @@ export interface PaymentMethod {
   jenis_pembayaran: string;
   biaya_admin: number;
   persentase_biaya: number;
-  status: 'aktif' | 'nonaktif';
+  status?: 'aktif' | 'nonaktif';
 }
 
 export interface Product {
@@ -38,11 +38,35 @@ export interface Product {
   nama_produk: string;
   deskripsi: string;
   harga: number;
+  harga_beli?: number;
   stok: number;
   kategori_id: number;
   kategori_nama?: string;
   gambar_url?: string;
+  barcode?: string;
+  kode_produk?: string;
+  has_variants?: boolean;
+  variants_count?: number;
   status: 'aktif' | 'nonaktif';
+  // Full backend response properties (for detail view)
+  kategori?: {
+    id: number;
+    nama_kategori: string;
+  };
+  stokProduk?: {
+    stok_tersedia: number;
+  };
+  varian?: Array<{
+    id: number;
+    nama_varian: string;
+    harga_beli: number;
+    harga_jual: number;
+  }>;
+  gambar?: Array<{
+    id: number;
+    path_gambar: string;
+    gambar_utama: boolean;
+  }>;
 }
 
 export interface ProductCategory {
@@ -57,13 +81,21 @@ export interface CustomerProfile {
   email: string;
   telepon: string;
   alamat: string;
+  kode_pelanggan: string;
   total_poin: number;
+  total_belanja: number;
+  grup?: {
+    id: number;
+    nama_grup: string;
+    diskon: number;
+  };
 }
 
 export interface CustomerAddress {
   id: number;
   label: string;
-  nama_penerima: string;
+  nama_penerima?: string;
+  penerima?: string; // Backend uses 'penerima' instead of 'nama_penerima'
   telepon_penerima: string;
   alamat_lengkap: string;
   kota: string;
@@ -168,7 +200,18 @@ const makeAuthenticatedRequest = async (url: string, options: RequestInit = {}) 
 // Banner API
 export const fetchBanners = async (): Promise<Banner[]> => {
   try {
-    const result = await makeAuthenticatedRequest('/customer/banners');
+    // Banners are public endpoints according to API documentation
+    const response = await fetch(`${API_URL}/public/banners`, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
     return result.data || [];
   } catch (error) {
     console.error('Error fetching banners:', error);
@@ -176,9 +219,11 @@ export const fetchBanners = async (): Promise<Banner[]> => {
   }
 };
 
-// Payment Methods API
+// Payment Methods API  
 export const fetchPaymentMethods = async (): Promise<PaymentMethod[]> => {
   try {
+    // Payment methods for customers - documented as available via customer dashboard
+    // But based on backend routes, it's also available directly
     const result = await makeAuthenticatedRequest('/customer/payment-methods');
     return result.data || [];
   } catch (error) {
@@ -201,12 +246,34 @@ export const fetchProducts = async (params?: {
     if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
     if (params?.page) queryParams.append('page', params.page.toString());
     
-    const url = `/customer/products${queryParams.toString() ? `?${queryParams}` : ''}`;
-    const result = await makeAuthenticatedRequest(url);
+    // Use public products endpoint for browsing products
+    const url = `${API_URL}/public/products${queryParams.toString() ? `?${queryParams}` : ''}`;
     
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    
+    // Debug logging for products list
+    console.log('📋 Products List API Response:');
+    console.log('Result structure:', Object.keys(result));
+    console.log('Data structure:', Object.keys(result.data || {}));
+    if (result.data?.length > 0) {
+      console.log('First product fields:', Object.keys(result.data[0]));
+      console.log('First product sample:', result.data[0]);
+    }
+    
+    // Public products API returns different structure - direct array in data
     return {
-      data: result.data?.data || result.data || [],
-      meta: result.data?.meta || result.meta
+      data: result.data || [],
+      meta: result.meta
     };
   } catch (error) {
     console.error('Error fetching products:', error);
@@ -216,8 +283,59 @@ export const fetchProducts = async (params?: {
 
 export const fetchProductById = async (id: number): Promise<Product> => {
   try {
-    const result = await makeAuthenticatedRequest(`/customer/products/${id}`);
-    return result.data;
+    // Use public product detail endpoint
+    const response = await fetch(`${API_URL}/public/products/${id}`, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    const product = result.data;
+    
+    // Debug logging to understand backend response structure
+    console.log('🔍 Public Product Detail Response:');
+    console.log('Product ID:', product.id);
+    console.log('Product Name:', product.nama_produk);
+    console.log('Available fields:', Object.keys(product));
+    console.log('Price range:', product.harga_jual_min, '-', product.harga_jual_max);
+    console.log('Varian array length:', product.varian?.length || 0);
+    console.log('Gambar array length:', product.gambar?.length || 0);
+    
+    if (product.varian?.length > 0) {
+      console.log('First variant:', product.varian[0]);
+    }
+    
+    // Transform public API response to match frontend interface
+    // Public API has different structure with variants containing individual stock
+    const firstVariant = product.varian && product.varian.length > 0 ? product.varian[0] : null;
+    
+    return {
+      id: product.id,
+      nama_produk: product.nama_produk,
+      deskripsi: product.deskripsi,
+      harga: firstVariant?.harga_jual || product.harga_jual_min || 0,
+      harga_beli: firstVariant?.harga_beli || 0,
+      stok: firstVariant?.stok || 0, // Variant stock from public API
+      kategori_id: product.kategori?.id,
+      kategori_nama: product.kategori?.nama_kategori,
+      gambar_url: product.gambar && product.gambar.length > 0 
+        ? product.gambar.find(g => g.gambar_utama)?.url || product.gambar[0]?.url
+        : null,
+      barcode: product.barcode,
+      kode_produk: product.kode_produk,
+      has_variants: product.varian && product.varian.length > 0,
+      variants_count: product.varian?.length || 0,
+      status: product.status,
+      // Include full backend response for advanced usage
+      kategori: product.kategori,
+      varian: product.varian,
+      gambar: product.gambar,
+    };
   } catch (error) {
     console.error('Error fetching product:', error);
     throw error;
@@ -226,7 +344,18 @@ export const fetchProductById = async (id: number): Promise<Product> => {
 
 export const fetchProductCategories = async (): Promise<ProductCategory[]> => {
   try {
-    const result = await makeAuthenticatedRequest('/customer/product-categories');
+    // Product categories are public endpoints according to API documentation
+    const response = await fetch(`${API_URL}/public/product-categories`, {
+      headers: {
+        'Accept': 'application/json',
+      },
+    });
+    
+    if (!response.ok) {
+      throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+    }
+    
+    const result = await response.json();
     return result.data || [];
   } catch (error) {
     console.error('Error fetching product categories:', error);
@@ -238,7 +367,7 @@ export const fetchProductCategories = async (): Promise<ProductCategory[]> => {
 export const fetchCustomerProfile = async (): Promise<CustomerProfile> => {
   try {
     const result = await makeAuthenticatedRequest('/customer/profile');
-    return result.data;
+    return result.data.customer;
   } catch (error) {
     console.error('Error fetching customer profile:', error);
     throw error;
@@ -406,7 +535,7 @@ export const addToWishlist = async (produk_id: number, varian_id?: number): Prom
   try {
     const result = await makeAuthenticatedRequest('/customer/wishlist', {
       method: 'POST',
-      body: JSON.stringify({ produk_id, varian_id }),
+      body: JSON.stringify({ produk_id: produk_id, varian_id }),
     });
     return result.data;
   } catch (error) {
@@ -443,9 +572,81 @@ export const validatePromotion = async (kode_promo: string, total_belanja: numbe
       method: 'POST',
       body: JSON.stringify({ kode_promo, total_belanja }),
     });
-    return result.data;
+    return {
+      nilai_diskon: result.data.total_diskon,
+      promo: result.data.promo
+    };
   } catch (error) {
     console.error('Error validating promotion:', error);
+    throw error;
+  }
+};
+
+// Customer Orders API
+export const createCustomerOrder = async (orderData: {
+  items: Array<{
+    produk_id: number;
+    varian_id?: number;
+    jumlah: number;
+  }>;
+  metode_pembayaran_id: number;
+  alamat_pengiriman: string;
+  catatan?: string;
+  promo_code?: string;
+  poin_digunakan?: number;
+}): Promise<any> => {
+  try {
+    const result = await makeAuthenticatedRequest('/customer/orders', {
+      method: 'POST',
+      body: JSON.stringify(orderData),
+    });
+    return result.data;
+  } catch (error) {
+    console.error('Error creating customer order:', error);
+    throw error;
+  }
+};
+
+export const fetchCustomerOrders = async (params?: {
+  per_page?: number;
+  page?: number;
+}): Promise<{ data: any[], meta?: any }> => {
+  try {
+    const queryParams = new URLSearchParams();
+    if (params?.per_page) queryParams.append('per_page', params.per_page.toString());
+    if (params?.page) queryParams.append('page', params.page.toString());
+    
+    const url = `/customer/orders${queryParams.toString() ? `?${queryParams}` : ''}`;
+    const result = await makeAuthenticatedRequest(url);
+    
+    return {
+      data: result.data?.data || result.data || [],
+      meta: result.data?.meta || result.meta
+    };
+  } catch (error) {
+    console.error('Error fetching customer orders:', error);
+    throw error;
+  }
+};
+
+export const fetchCustomerOrderById = async (id: number): Promise<any> => {
+  try {
+    const result = await makeAuthenticatedRequest(`/customer/orders/${id}`);
+    return result.data;
+  } catch (error) {
+    console.error('Error fetching customer order:', error);
+    throw error;
+  }
+};
+
+export const cancelCustomerOrder = async (id: number): Promise<any> => {
+  try {
+    const result = await makeAuthenticatedRequest(`/customer/orders/${id}/cancel`, {
+      method: 'POST',
+    });
+    return result.data;
+  } catch (error) {
+    console.error('Error cancelling customer order:', error);
     throw error;
   }
 };

@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
-import { StatusBar } from 'react-native';
 import { Stack } from 'expo-router';
+import { StatusBar } from 'expo-status-bar';
 import { useFonts } from 'expo-font';
 import * as SplashScreen from 'expo-splash-screen';
 import { CartProvider } from '../contexts/CartContext';
@@ -29,7 +29,7 @@ export default function RootLayout() {
     <ErrorBoundary>
       <CartProvider>
         <StatusBar 
-          barStyle="light-content" 
+          style="light" 
           backgroundColor="#1E40AF" 
           translucent={false}
         />

@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://10.215.191.61:8000/api';
+const API_URL = 'http://192.168.100.36:8000/api';
 
 // Demo mode for development when server is not available
 const DEMO_MODE = false; // Set to true to enable demo mode
@@ -9,13 +9,14 @@ export interface LoginResponse {
   success: boolean;
   data: {
     token: string;
-    user: {
+    customer: {
       id: number;
       nama_pelanggan: string;
       email: string;
       telepon: string;
-      alamat: string;
+      kode_pelanggan: string;
       total_poin: number;
+      grup?: string;
     };
   };
   message?: string;
@@ -51,8 +52,8 @@ export const login = async (email: string, password: string): Promise<LoginRespo
     
     if (result.success && result.data?.token) {
       await AsyncStorage.setItem('auth_token', result.data.token);
-      if (result.data.user) {
-        await AsyncStorage.setItem('user_data', JSON.stringify(result.data.user));
+      if (result.data.customer) {
+        await AsyncStorage.setItem('user_data', JSON.stringify(result.data.customer));
       }
     }
     
@@ -78,8 +79,8 @@ export const register = async (data: RegisterData): Promise<LoginResponse> => {
     
     if (result.success && result.data?.token) {
       await AsyncStorage.setItem('auth_token', result.data.token);
-      if (result.data.user) {
-        await AsyncStorage.setItem('user_data', JSON.stringify(result.data.user));
+      if (result.data.customer) {
+        await AsyncStorage.setItem('user_data', JSON.stringify(result.data.customer));
       }
     }
     

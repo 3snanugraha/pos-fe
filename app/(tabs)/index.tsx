@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import BannerSlider from '../../components/BannerSlider';
-import { fetchBanners, fetchProducts, fetchProductCategories, Banner, Product, ProductCategory } from '../../services/api';
-import { verifyToken } from '../../services/auth';
+import { fetchBanners, fetchProducts, fetchProductCategories, fetchCustomerProfile, Banner, Product, ProductCategory } from '../../services/api';
+import { verifyToken, getUserData } from '../../services/auth';
 import { handleAuthError, getErrorMessage } from '../../utils/auth';
 import { useCart } from '../../contexts/CartContext';
 
@@ -13,6 +13,7 @@ const HomeScreen = () => {
   const [banners, setBanners] = useState<Banner[]>([]);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
+  const [customerName, setCustomerName] = useState<string>('Pelanggan');
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -63,16 +64,47 @@ const HomeScreen = () => {
         return;
       }
 
+      // Get customer name from stored data first (faster)
+      try {
+        const userData = await getUserData();
+        if (userData?.nama_pelanggan) {
+          setCustomerName(userData.nama_pelanggan);
+        }
+      } catch (error) {
+        console.log('Could not get stored user data');
+      }
+
       // Load semua data dashboard
-      const [bannersData, categoriesData, productsResult] = await Promise.all([
+      // Use public endpoints for better performance
+      const [bannersData, categoriesData] = await Promise.all([
         fetchBanners(),
-        fetchProductCategories(),
-        fetchProducts({ per_page: 6 }) // Ambil 6 produk untuk featured
+        fetchProductCategories()
       ]);
+      
+      // Load featured products separately to handle different response structure
+      try {
+        const response = await fetch(`http://192.168.100.36:8000/api/public/featured-products?limit=6`, {
+          headers: {
+            'Accept': 'application/json',
+          },
+        });
+        
+        if (response.ok) {
+          const featuredResult = await response.json();
+          setFeaturedProducts(featuredResult.data || []);
+        } else {
+          // Fallback to regular products if featured products not available
+          const productsResult = await fetchProducts({ per_page: 6 });
+          setFeaturedProducts(productsResult.data);
+        }
+      } catch (error) {
+        console.log('Featured products not available, using regular products');
+        const productsResult = await fetchProducts({ per_page: 6 });
+        setFeaturedProducts(productsResult.data);
+      }
       
       setBanners(bannersData);
       setCategories(categoriesData.slice(0, 8)); // Ambil 8 kategori pertama
-      setFeaturedProducts(productsResult.data);
     } catch (error: any) {
       console.error('Error loading home data:', error);
       
@@ -128,7 +160,7 @@ const HomeScreen = () => {
         <View className="flex-row justify-between items-center">
           <View>
             <Text className="text-white text-lg">Selamat Datang,</Text>
-            <Text className="text-white text-2xl font-bold">Pelanggan</Text>
+            <Text className="text-white text-2xl font-bold">{customerName}</Text>
           </View>
           <View className="flex-row space-x-4">
             <Pressable onPress={() => router.push('/notifications')}>
@@ -256,9 +288,14 @@ const HomeScreen = () => {
                   <Text className="font-medium" numberOfLines={2}>{product.nama_produk}</Text>
                   <Text className="text-gray-500 text-xs">{product.kategori_nama}</Text>
                   <Text className="text-primary font-bold mt-1">
-                    {formatPrice(product.harga)}
+                    {product.harga_range || formatPrice(product.harga || product.harga_jual_min || 0)}
                   </Text>
-                  <Text className="text-xs text-gray-500 mt-1">Stok: {Number(product.stok) || 0}</Text>
+                  <Text className="text-xs text-gray-500 mt-1">
+                    {product.variants_count > 1 
+                      ? `${product.variants_count} varian` 
+                      : `Stok: ${Number(product.stok) || 0}`
+                    }
+                  </Text>
                 </Pressable>
               ))}
             </ScrollView>
