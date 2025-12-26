@@ -1,8 +1,8 @@
-import React from 'react';
-import { View, Text, Pressable } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { router } from 'expo-router';
+import { Ionicons } from "@expo/vector-icons";
+import { router } from "expo-router";
+import React from "react";
+import { Pressable, Text, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -14,7 +14,10 @@ interface ErrorBoundaryProps {
   fallback?: React.ComponentType<{ error: Error; retry: () => void }>;
 }
 
-class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
+class ErrorBoundary extends React.Component<
+  ErrorBoundaryProps,
+  ErrorBoundaryState
+> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
     this.state = { hasError: false, error: null };
@@ -25,7 +28,7 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error('ErrorBoundary caught an error:', error, errorInfo);
+    console.error("ErrorBoundary caught an error:", error, errorInfo);
   }
 
   retry = () => {
@@ -36,7 +39,9 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
     if (this.state.hasError) {
       if (this.props.fallback) {
         const FallbackComponent = this.props.fallback;
-        return <FallbackComponent error={this.state.error!} retry={this.retry} />;
+        return (
+          <FallbackComponent error={this.state.error!} retry={this.retry} />
+        );
       }
 
       return (
@@ -47,9 +52,10 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
               Oops! Terjadi Kesalahan
             </Text>
             <Text className="text-gray-500 text-center mb-6">
-              Aplikasi mengalami masalah teknis. Silakan coba lagi atau hubungi dukungan jika masalah berlanjut.
+              Aplikasi mengalami masalah teknis. Silakan coba lagi atau hubungi
+              dukungan jika masalah berlanjut.
             </Text>
-            
+
             {__DEV__ && this.state.error && (
               <View className="bg-red-50 border border-red-200 rounded-xl p-4 mb-6 w-full">
                 <Text className="text-red-700 text-sm font-mono">
@@ -65,12 +71,14 @@ class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundarySta
               >
                 <Text className="text-white font-semibold">Coba Lagi</Text>
               </Pressable>
-              
+
               <Pressable
-                onPress={() => router.replace('/(tabs)/')}
+                onPress={() => router.replace("/")}
                 className="bg-gray-100 px-6 py-3 rounded-xl"
               >
-                <Text className="text-gray-700 font-semibold">Kembali ke Home</Text>
+                <Text className="text-gray-700 font-semibold">
+                  Kembali ke Home
+                </Text>
               </Pressable>
             </View>
           </View>

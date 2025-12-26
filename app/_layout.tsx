@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
-import { Stack } from 'expo-router';
-import { StatusBar } from 'expo-status-bar';
-import { useFonts } from 'expo-font';
-import * as SplashScreen from 'expo-splash-screen';
-import { CartProvider } from '../contexts/CartContext';
-import ErrorBoundary from '../components/ErrorBoundary';
+import { useFonts } from "expo-font";
+import { Stack } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { StatusBar } from "expo-status-bar";
+import { useEffect } from "react";
+import ErrorBoundary from "../components/ErrorBoundary";
+import { CartProvider } from "../contexts/CartContext";
 import "../global.css";
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
@@ -28,16 +28,14 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <CartProvider>
-        <StatusBar 
-          style="light" 
-          backgroundColor="#1E40AF" 
-          translucent={false}
+        <StatusBar style="dark" backgroundColor="#F3F4F6" translucent={false} />
+        <Stack
+          screenOptions={{
+            headerShown: false,
+            contentStyle: { backgroundColor: "#F3F4F6" },
+            animation: "slide_from_right",
+          }}
         />
-        <Stack screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: '#F3F4F6' },
-          animation: 'slide_from_right',
-        }} />
       </CartProvider>
     </ErrorBoundary>
   );

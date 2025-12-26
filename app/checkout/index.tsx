@@ -1,40 +1,51 @@
-import React, { useState, useEffect } from 'react';
-import { View, Text, ScrollView, Pressable, Alert, TextInput } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
-import { Ionicons } from '@expo/vector-icons';
-import Navbar from '../../components/Navbar';
-import { useCart } from '../../contexts/CartContext';
-import { 
-  fetchCustomerAddresses, 
-  fetchPaymentMethods, 
-  CustomerAddress, 
+import { Ionicons } from "@expo/vector-icons";
+import { useRouter } from "expo-router";
+import { useEffect, useState } from "react";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import Navbar from "../../components/Navbar";
+import { useCart } from "../../contexts/CartContext";
+import {
+  createCustomerOrder,
+  CustomerAddress,
+  fetchCustomerAddresses,
+  fetchPaymentMethods,
   PaymentMethod,
-  validatePromotion 
-} from '../../services/api';
-import { verifyToken } from '../../services/auth';
-import { handleAuthError, getErrorMessage } from '../../utils/auth';
+  validatePromotion,
+} from "../../services/api";
+import { verifyToken } from "../../services/auth";
+import { getErrorMessage, handleAuthError } from "../../utils/auth";
 
 const CheckoutScreen = () => {
   const router = useRouter();
   const { items, totalAmount, clearCart } = useCart();
-  
+
   const [step, setStep] = useState(1); // 1: Address, 2: Payment, 3: Order Summary
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-  const [selectedAddress, setSelectedAddress] = useState<CustomerAddress | null>(null);
-  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(null);
-  const [promoCode, setPromoCode] = useState('');
+  const [selectedAddress, setSelectedAddress] =
+    useState<CustomerAddress | null>(null);
+  const [selectedPayment, setSelectedPayment] = useState<PaymentMethod | null>(
+    null
+  );
+  const [promoCode, setPromoCode] = useState("");
   const [promoDiscount, setPromoDiscount] = useState(0);
-  const [deliveryFee, setDeliveryFee] = useState(15000);
-  const [notes, setNotes] = useState('');
+  const [notes, setNotes] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isProcessingOrder, setIsProcessingOrder] = useState(false);
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
+    return new Intl.NumberFormat("id-ID", {
+      style: "currency",
+      currency: "IDR",
       minimumFractionDigits: 0,
     }).format(price);
   };
@@ -42,39 +53,38 @@ const CheckoutScreen = () => {
   const loadCheckoutData = async () => {
     setLoading(true);
     setError(null);
-    
+
     try {
       const isValidToken = await verifyToken();
-      
+
       if (!isValidToken) {
-        setError('Sesi Anda telah berakhir, akan diarahkan ke halaman login');
-        await handleAuthError({ message: 'Token expired or invalid' });
+        setError("Sesi Anda telah berakhir, akan diarahkan ke halaman login");
+        await handleAuthError({ message: "Token expired or invalid" });
         return;
       }
 
       const [addressesData, paymentMethodsData] = await Promise.all([
         fetchCustomerAddresses(),
-        fetchPaymentMethods()
+        fetchPaymentMethods(),
       ]);
-      
+
       setAddresses(addressesData);
       setPaymentMethods(paymentMethodsData);
-      
+
       // Set default address
-      const defaultAddress = addressesData.find(addr => addr.is_default);
+      const defaultAddress = addressesData.find((addr) => addr.is_default);
       if (defaultAddress) {
         setSelectedAddress(defaultAddress);
       } else if (addressesData.length > 0) {
         setSelectedAddress(addressesData[0]);
       }
-      
+
       // Set default payment method
       if (paymentMethodsData.length > 0) {
         setSelectedPayment(paymentMethodsData[0]);
       }
-      
     } catch (error: any) {
-      console.error('Error loading checkout data:', error);
+      console.error("Error loading checkout data:", error);
       const isAuthError = await handleAuthError(error);
       if (!isAuthError) {
         setError(getErrorMessage(error));
@@ -86,95 +96,112 @@ const CheckoutScreen = () => {
 
   const handleApplyPromo = async () => {
     if (!promoCode.trim()) {
-      Alert.alert('Error', 'Masukkan kode promo');
+      Alert.alert("Error", "Masukkan kode promo");
       return;
     }
 
     try {
       const promoData = await validatePromotion(promoCode, totalAmount);
       setPromoDiscount(promoData.nilai_diskon);
-      Alert.alert('Berhasil!', `Kode promo berhasil diterapkan. Diskon ${formatPrice(promoData.nilai_diskon)}`);
+      Alert.alert(
+        "Berhasil!",
+        `Kode promo berhasil diterapkan. Diskon ${formatPrice(promoData.nilai_diskon)}`
+      );
     } catch (error: any) {
-      console.error('Error applying promo:', error);
-      Alert.alert('Error', 'Kode promo tidak valid atau sudah tidak berlaku');
+      console.error("Error applying promo:", error);
+      Alert.alert("Error", "Kode promo tidak valid atau sudah tidak berlaku");
     }
   };
 
   const handlePlaceOrder = async () => {
     if (!selectedAddress) {
-      Alert.alert('Error', 'Pilih alamat pengiriman');
+      Alert.alert("Error", "Pilih alamat pengiriman");
       return;
     }
-    
+
     if (!selectedPayment) {
-      Alert.alert('Error', 'Pilih metode pembayaran');
+      Alert.alert("Error", "Pilih metode pembayaran");
       return;
     }
+
+    if (isProcessingOrder) {
+      return; // Prevent double submission
+    }
+
+    setIsProcessingOrder(true);
 
     try {
-      // TODO: Implement order creation API call
+      // Format alamat lengkap untuk dikirim ke backend
+      const fullAddress = `${selectedAddress.alamat_lengkap}, ${selectedAddress.kota}, ${selectedAddress.provinsi} ${selectedAddress.kode_pos}`;
+
       const orderData = {
-        items: items.map(item => ({
+        items: items.map((item) => ({
           produk_id: item.produk_id,
-          varian_id: item.varian_id,
+          varian_id: item.varian_id || undefined,
           jumlah: item.quantity,
-          harga: item.harga,
-          subtotal: item.subtotal,
         })),
-        alamat_pengiriman_id: selectedAddress.id,
         metode_pembayaran_id: selectedPayment.id,
-        total_harga: totalAmount,
-        ongkir: deliveryFee,
-        diskon: promoDiscount,
-        total_bayar: totalAmount + deliveryFee - promoDiscount,
-        catatan: notes,
-        kode_promo: promoCode,
+        alamat_pengiriman: fullAddress,
+        catatan: notes.trim() || undefined,
+        promo_code: promoCode.trim() || undefined,
+        poin_digunakan: 0, // TODO: Implement points usage if needed
       };
 
-      console.log('Order data:', orderData);
-      
+      console.log("=== DEBUG: Creating Order ===");
+      console.log("Order data:", JSON.stringify(orderData, null, 2));
+
+      const result = await createCustomerOrder(orderData);
+
+      console.log("Order creation result:", JSON.stringify(result, null, 2));
+
       // Clear cart after successful order
       await clearCart();
-      
-      Alert.alert(
-        'Pesanan Berhasil!',
-        'Pesanan Anda telah berhasil dibuat. Anda akan diarahkan ke halaman riwayat pesanan.',
-        [
-          {
-            text: 'OK',
-            onPress: () => router.replace('/(tabs)/profile'),
-          },
-        ]
-      );
+
+      // Redirect to success page with order details
+      router.replace({
+        pathname: "/checkout/success",
+        params: {
+          orderNumber: result.nomor_transaksi || "N/A",
+          totalAmount: finalTotal.toString(),
+        },
+      });
     } catch (error: any) {
-      console.error('Error placing order:', error);
-      Alert.alert('Error', 'Gagal membuat pesanan. Silakan coba lagi.');
+      console.error("Error placing order:", error);
+      Alert.alert(
+        "Error",
+        getErrorMessage(error) || "Gagal membuat pesanan. Silakan coba lagi."
+      );
+    } finally {
+      setIsProcessingOrder(false);
     }
   };
 
   useEffect(() => {
     if (items.length === 0) {
       Alert.alert(
-        'Keranjang Kosong',
-        'Keranjang belanja Anda kosong. Silakan tambahkan produk terlebih dahulu.',
+        "Keranjang Kosong",
+        "Keranjang belanja Anda kosong. Silakan tambahkan produk terlebih dahulu.",
         [
           {
-            text: 'OK',
-            onPress: () => router.replace('/(tabs)/products'),
+            text: "OK",
+            onPress: () => router.replace("/(tabs)/products"),
           },
         ]
       );
       return;
     }
-    
-    loadCheckoutData();
-  }, []);
 
-  const finalTotal = totalAmount + deliveryFee - promoDiscount;
+    loadCheckoutData();
+  }, [items.length, router]);
+
+  const finalTotal = totalAmount - promoDiscount;
 
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-background" edges={['top', 'left', 'right']}>
+      <SafeAreaView
+        className="flex-1 bg-background"
+        edges={["top", "left", "right"]}
+      >
         <Navbar title="Checkout" showBackButton={true} />
         <View className="flex-1 justify-center items-center">
           <Text className="text-gray-500">Memuat data checkout...</Text>
@@ -185,7 +212,10 @@ const CheckoutScreen = () => {
 
   if (error) {
     return (
-      <SafeAreaView className="flex-1 bg-background" edges={['top', 'left', 'right']}>
+      <SafeAreaView
+        className="flex-1 bg-background"
+        edges={["top", "left", "right"]}
+      >
         <Navbar title="Checkout" showBackButton={true} />
         <View className="flex-1 justify-center items-center px-4">
           <View className="bg-red-50 border border-red-200 rounded-xl p-4 w-full">
@@ -197,26 +227,35 @@ const CheckoutScreen = () => {
   }
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={['top', 'left', 'right']}>
+    <SafeAreaView
+      className="flex-1 bg-background"
+      edges={["top", "left", "right"]}
+    >
       <Navbar title="Checkout" showBackButton={true} />
 
       {/* Step Indicator */}
       <View className="flex-row justify-between items-center px-4 py-3 bg-white">
         {[1, 2, 3].map((stepNum) => (
           <View key={stepNum} className="flex-1 flex-row items-center">
-            <View className={`w-8 h-8 rounded-full items-center justify-center ${
-              step >= stepNum ? 'bg-primary' : 'bg-gray-300'
-            }`}>
-              <Text className={`text-sm font-bold ${
-                step >= stepNum ? 'text-white' : 'text-gray-500'
-              }`}>
+            <View
+              className={`w-8 h-8 rounded-full items-center justify-center ${
+                step >= stepNum ? "bg-primary" : "bg-gray-300"
+              }`}
+            >
+              <Text
+                className={`text-sm font-bold ${
+                  step >= stepNum ? "text-white" : "text-gray-500"
+                }`}
+              >
                 {stepNum}
               </Text>
             </View>
             {stepNum < 3 && (
-              <View className={`flex-1 h-0.5 mx-2 ${
-                step > stepNum ? 'bg-primary' : 'bg-gray-300'
-              }`} />
+              <View
+                className={`flex-1 h-0.5 mx-2 ${
+                  step > stepNum ? "bg-primary" : "bg-gray-300"
+                }`}
+              />
             )}
           </View>
         ))}
@@ -226,7 +265,7 @@ const CheckoutScreen = () => {
         {step === 1 && (
           <View className="p-4">
             <Text className="text-xl font-bold mb-4">Alamat Pengiriman</Text>
-            
+
             {addresses.length === 0 ? (
               <View className="bg-white rounded-xl p-4 items-center">
                 <Ionicons name="location-outline" size={48} color="#9CA3AF" />
@@ -234,10 +273,12 @@ const CheckoutScreen = () => {
                   Belum ada alamat tersimpan
                 </Text>
                 <Pressable
-                  onPress={() => router.push('/address/add')}
+                  onPress={() => router.push("/addresses/add")}
                   className="bg-primary px-6 py-3 rounded-xl"
                 >
-                  <Text className="text-white font-semibold">Tambah Alamat</Text>
+                  <Text className="text-white font-semibold">
+                    Tambah Alamat
+                  </Text>
                 </Pressable>
               </View>
             ) : (
@@ -247,7 +288,9 @@ const CheckoutScreen = () => {
                     key={address.id}
                     onPress={() => setSelectedAddress(address)}
                     className={`bg-white rounded-xl p-4 mb-3 ${
-                      selectedAddress?.id === address.id ? 'border-2 border-primary' : ''
+                      selectedAddress?.id === address.id
+                        ? "border-2 border-primary"
+                        : ""
                     }`}
                   >
                     <View className="flex-row items-start justify-between">
@@ -264,24 +307,38 @@ const CheckoutScreen = () => {
                             </View>
                           )}
                         </View>
-                        <Text className="text-gray-900 mb-1">{address.nama_penerima}</Text>
-                        <Text className="text-gray-600 mb-1">{address.telepon_penerima}</Text>
-                        <Text className="text-gray-600">{address.alamat_lengkap}</Text>
+                        <Text className="text-gray-900 mb-1">
+                          {address.nama_penerima}
+                        </Text>
+                        <Text className="text-gray-600 mb-1">
+                          {address.telepon_penerima}
+                        </Text>
+                        <Text className="text-gray-600">
+                          {address.alamat_lengkap}
+                        </Text>
                         <Text className="text-gray-600">
                           {address.kota}, {address.provinsi} {address.kode_pos}
                         </Text>
                       </View>
-                      <Ionicons 
-                        name={selectedAddress?.id === address.id ? "radio-button-on" : "radio-button-off"} 
-                        size={24} 
-                        color={selectedAddress?.id === address.id ? "#1E40AF" : "#9CA3AF"} 
+                      <Ionicons
+                        name={
+                          selectedAddress?.id === address.id
+                            ? "radio-button-on"
+                            : "radio-button-off"
+                        }
+                        size={24}
+                        color={
+                          selectedAddress?.id === address.id
+                            ? "#1E40AF"
+                            : "#9CA3AF"
+                        }
                       />
                     </View>
                   </Pressable>
                 ))}
-                
+
                 <Pressable
-                  onPress={() => router.push('/address/add')}
+                  onPress={() => router.push("/addresses/add")}
                   className="bg-gray-50 border-2 border-dashed border-gray-300 rounded-xl p-4 items-center"
                 >
                   <Ionicons name="add-outline" size={24} color="#6B7280" />
@@ -297,13 +354,15 @@ const CheckoutScreen = () => {
         {step === 2 && (
           <View className="p-4">
             <Text className="text-xl font-bold mb-4">Metode Pembayaran</Text>
-            
+
             {paymentMethods.map((method) => (
               <Pressable
                 key={method.id}
                 onPress={() => setSelectedPayment(method)}
                 className={`bg-white rounded-xl p-4 mb-3 ${
-                  selectedPayment?.id === method.id ? 'border-2 border-primary' : ''
+                  selectedPayment?.id === method.id
+                    ? "border-2 border-primary"
+                    : ""
                 }`}
               >
                 <View className="flex-row items-center justify-between">
@@ -320,10 +379,16 @@ const CheckoutScreen = () => {
                       </Text>
                     )}
                   </View>
-                  <Ionicons 
-                    name={selectedPayment?.id === method.id ? "radio-button-on" : "radio-button-off"} 
-                    size={24} 
-                    color={selectedPayment?.id === method.id ? "#1E40AF" : "#9CA3AF"} 
+                  <Ionicons
+                    name={
+                      selectedPayment?.id === method.id
+                        ? "radio-button-on"
+                        : "radio-button-off"
+                    }
+                    size={24}
+                    color={
+                      selectedPayment?.id === method.id ? "#1E40AF" : "#9CA3AF"
+                    }
                   />
                 </View>
               </Pressable>
@@ -361,12 +426,15 @@ const CheckoutScreen = () => {
         {step === 3 && (
           <View className="p-4">
             <Text className="text-xl font-bold mb-4">Ringkasan Pesanan</Text>
-            
+
             {/* Order Items */}
             <View className="bg-white rounded-xl p-4 mb-4">
               <Text className="font-semibold mb-3">Item Pesanan</Text>
               {items.map((item) => (
-                <View key={item.id} className="flex-row justify-between items-center py-2">
+                <View
+                  key={item.id}
+                  className="flex-row justify-between items-center py-2"
+                >
                   <View className="flex-1">
                     <Text className="font-medium" numberOfLines={2}>
                       {item.nama_produk}
@@ -375,7 +443,9 @@ const CheckoutScreen = () => {
                       {item.quantity} x {formatPrice(item.harga)}
                     </Text>
                   </View>
-                  <Text className="font-medium">{formatPrice(item.subtotal)}</Text>
+                  <Text className="font-medium">
+                    {formatPrice(item.subtotal)}
+                  </Text>
                 </View>
               ))}
             </View>
@@ -384,11 +454,18 @@ const CheckoutScreen = () => {
             {selectedAddress && (
               <View className="bg-white rounded-xl p-4 mb-4">
                 <Text className="font-semibold mb-3">Alamat Pengiriman</Text>
-                <Text className="font-medium">{selectedAddress.nama_penerima}</Text>
-                <Text className="text-gray-600">{selectedAddress.telepon_penerima}</Text>
-                <Text className="text-gray-600 mt-1">{selectedAddress.alamat_lengkap}</Text>
+                <Text className="font-medium">
+                  {selectedAddress.nama_penerima}
+                </Text>
                 <Text className="text-gray-600">
-                  {selectedAddress.kota}, {selectedAddress.provinsi} {selectedAddress.kode_pos}
+                  {selectedAddress.telepon_penerima}
+                </Text>
+                <Text className="text-gray-600 mt-1">
+                  {selectedAddress.alamat_lengkap}
+                </Text>
+                <Text className="text-gray-600">
+                  {selectedAddress.kota}, {selectedAddress.provinsi}{" "}
+                  {selectedAddress.kode_pos}
                 </Text>
               </View>
             )}
@@ -397,14 +474,20 @@ const CheckoutScreen = () => {
             {selectedPayment && (
               <View className="bg-white rounded-xl p-4 mb-4">
                 <Text className="font-semibold mb-3">Metode Pembayaran</Text>
-                <Text className="font-medium">{selectedPayment.nama_metode}</Text>
-                <Text className="text-gray-600">{selectedPayment.jenis_pembayaran}</Text>
+                <Text className="font-medium">
+                  {selectedPayment.nama_metode}
+                </Text>
+                <Text className="text-gray-600">
+                  {selectedPayment.jenis_pembayaran}
+                </Text>
               </View>
             )}
 
             {/* Order Notes */}
             <View className="bg-white rounded-xl p-4 mb-4">
-              <Text className="font-semibold mb-3">Catatan Pesanan (Opsional)</Text>
+              <Text className="font-semibold mb-3">
+                Catatan Pesanan (Opsional)
+              </Text>
               <TextInput
                 value={notes}
                 onChangeText={setNotes}
@@ -419,26 +502,23 @@ const CheckoutScreen = () => {
             {/* Price Summary */}
             <View className="bg-white rounded-xl p-4 mb-24">
               <Text className="font-semibold mb-3">Rincian Pembayaran</Text>
-              
+
               <View className="flex-row justify-between mb-2">
                 <Text className="text-gray-600">Subtotal</Text>
                 <Text className="font-medium">{formatPrice(totalAmount)}</Text>
               </View>
-              
-              <View className="flex-row justify-between mb-2">
-                <Text className="text-gray-600">Ongkos Kirim</Text>
-                <Text className="font-medium">{formatPrice(deliveryFee)}</Text>
-              </View>
-              
+
               {promoDiscount > 0 && (
                 <View className="flex-row justify-between mb-2">
                   <Text className="text-green-600">Diskon Promo</Text>
-                  <Text className="text-green-600 font-medium">-{formatPrice(promoDiscount)}</Text>
+                  <Text className="text-green-600 font-medium">
+                    -{formatPrice(promoDiscount)}
+                  </Text>
                 </View>
               )}
-              
+
               <View className="border-t border-gray-200 my-2" />
-              
+
               <View className="flex-row justify-between">
                 <Text className="font-bold text-lg">Total Bayar</Text>
                 <Text className="font-bold text-lg text-primary">
@@ -461,27 +541,36 @@ const CheckoutScreen = () => {
               <Text className="text-gray-700 font-semibold">Kembali</Text>
             </Pressable>
           )}
-          
+
           <Pressable
             onPress={step === 3 ? handlePlaceOrder : () => setStep(step + 1)}
             disabled={
               (step === 1 && !selectedAddress) ||
-              (step === 2 && !selectedPayment)
+              (step === 2 && !selectedPayment) ||
+              (step === 3 && isProcessingOrder)
             }
             className={`flex-1 py-3 rounded-xl items-center ${
               (step === 1 && !selectedAddress) ||
-              (step === 2 && !selectedPayment)
-                ? 'bg-gray-300'
-                : 'bg-primary'
+              (step === 2 && !selectedPayment) ||
+              (step === 3 && isProcessingOrder)
+                ? "bg-gray-300"
+                : "bg-primary"
             }`}
           >
-            <Text className={`font-semibold ${
-              (step === 1 && !selectedAddress) ||
-              (step === 2 && !selectedPayment)
-                ? 'text-gray-500'
-                : 'text-white'
-            }`}>
-              {step === 3 ? 'Buat Pesanan' : 'Lanjutkan'}
+            <Text
+              className={`font-semibold ${
+                (step === 1 && !selectedAddress) ||
+                (step === 2 && !selectedPayment) ||
+                (step === 3 && isProcessingOrder)
+                  ? "text-gray-500"
+                  : "text-white"
+              }`}
+            >
+              {step === 3 && isProcessingOrder
+                ? "Memproses..."
+                : step === 3
+                  ? "Buat Pesanan"
+                  : "Lanjutkan"}
             </Text>
           </Pressable>
         </View>
