@@ -4,6 +4,7 @@ import {
   ActivityIndicator,
   Alert,
   Image,
+  Linking,
   Pressable,
   ScrollView,
   Text,
@@ -13,6 +14,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import Navbar from "../../components/Navbar";
 import { apiService } from "../../services/apiService";
+import { printOrderReceipt } from "../../utils/printReceipt";
 
 interface OrderDetail {
   id: number;
@@ -97,6 +99,7 @@ const OrderDetailScreen = () => {
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [cancelling, setCancelling] = useState(false);
+  const [printing, setPrinting] = useState(false);
   const router = useRouter();
 
   const loadOrder = async () => {
@@ -144,6 +147,36 @@ const OrderDetailScreen = () => {
         },
       ]
     );
+  };
+
+  const handlePrint = async () => {
+    if (!order) return;
+    setPrinting(true);
+    try {
+      const success = await printOrderReceipt(order);
+      if (!success) {
+        Alert.alert(
+          "Aplikasi Tidak Ditemukan",
+          "Untuk mencetak struk, silakan install aplikasi RawBT atau Thermer dari Play Store.",
+          [
+            { text: "Batal", style: "cancel" },
+            {
+              text: "Buka Play Store",
+              onPress: () => {
+                Linking.openURL(
+                  "market://details?id=ru.a402d.rawbtprinter"
+                ).catch(() => {});
+              },
+            },
+          ]
+        );
+      }
+    } catch (error) {
+      console.error("Print error:", error);
+      Alert.alert("Error", "Gagal mencetak struk");
+    } finally {
+      setPrinting(false);
+    }
   };
 
   if (loading) {
@@ -345,9 +378,33 @@ const OrderDetailScreen = () => {
           </View>
         </View>
 
-        {/* Cancel Button */}
-        {canCancel && (
-          <View className="mx-4 mt-4 mb-6">
+        {/* Print & Cancel Buttons */}
+        <View className="mx-4 mt-4 mb-6">
+          <Pressable
+            onPress={handlePrint}
+            disabled={printing}
+            className={`bg-primary rounded-xl py-3 items-center mb-3 ${
+              printing ? "opacity-50" : ""
+            }`}
+          >
+            <View className="flex-row items-center">
+              {printing ? (
+                <ActivityIndicator size="small" color="white" />
+              ) : (
+                <Ionicons
+                  name="print-outline"
+                  size={20}
+                  color="white"
+                  style={{ marginRight: 8 }}
+                />
+              )}
+              <Text className="text-white font-semibold text-base">
+                {printing ? "Mencetak..." : "Cetak Struk"}
+              </Text>
+            </View>
+          </Pressable>
+
+          {canCancel && (
             <Pressable
               onPress={handleCancelOrder}
               disabled={cancelling}
@@ -363,8 +420,8 @@ const OrderDetailScreen = () => {
                 </Text>
               )}
             </Pressable>
-          </View>
-        )}
+          )}
+        </View>
 
         {/* Bottom spacing */}
         <View className="h-4" />
