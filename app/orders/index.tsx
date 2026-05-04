@@ -10,8 +10,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Navbar from "../../components/Navbar";
-import { fetchCustomerTransactions, Transaction } from "../../services/api";
-import { verifyToken } from "../../services/auth";
+import { apiService } from "../../services/apiService";
+import { Transaction } from "../../services/types";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 
 const OrderHistoryScreen = () => {
@@ -79,16 +79,8 @@ const OrderHistoryScreen = () => {
     setError(null);
 
     try {
-      const isValidToken = await verifyToken();
-
-      if (!isValidToken) {
-        setError("Sesi Anda telah berakhir, akan diarahkan ke halaman login");
-        await handleAuthError({ message: "Token expired or invalid" });
-        return;
-      }
-
       const params = filter !== "semua" ? { status: filter } : {};
-      const result = await fetchCustomerTransactions(params);
+      const result = await apiService.getCustomerTransactions(params);
 
       // Ensure result and result.data exist
       if (result && result.data && Array.isArray(result.data)) {

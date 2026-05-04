@@ -13,12 +13,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Navbar from "../../../components/Navbar";
-import {
-  CustomerAddress,
-  fetchCustomerAddresses,
-  updateCustomerAddress,
-} from "../../../services/api";
-import { verifyToken } from "../../../services/auth";
+import { apiService } from "../../../services/apiService";
+import { CustomerAddress } from "../../../services/types";
 import { AddressCreateData } from "../../../services/types";
 import { getErrorMessage, handleAuthError } from "../../../utils/auth";
 
@@ -46,19 +42,8 @@ const EditAddressScreen = () => {
     setInitialLoading(true);
 
     try {
-      const isValidToken = await verifyToken();
-
-      if (!isValidToken) {
-        Alert.alert(
-          "Error",
-          "Sesi Anda telah berakhir, akan diarahkan ke halaman login"
-        );
-        await handleAuthError({ message: "Token expired or invalid" });
-        return;
-      }
-
       // Fetch all addresses and find the one we need
-      const addresses = await fetchCustomerAddresses();
+      const addresses = await apiService.getCustomerAddresses();
       const targetAddress = addresses.find((addr) => addr.id === parseInt(id));
 
       if (!targetAddress) {
@@ -139,18 +124,7 @@ const EditAddressScreen = () => {
     setLoading(true);
 
     try {
-      const isValidToken = await verifyToken();
-
-      if (!isValidToken) {
-        Alert.alert(
-          "Error",
-          "Sesi Anda telah berakhir, akan diarahkan ke halaman login"
-        );
-        await handleAuthError({ message: "Token expired or invalid" });
-        return;
-      }
-
-      await updateCustomerAddress(address.id, formData);
+      await apiService.updateCustomerAddress(address.id, formData);
 
       Alert.alert("Berhasil!", "Alamat berhasil diperbarui", [
         {

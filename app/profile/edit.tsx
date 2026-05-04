@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../../components/Navbar';
-import { fetchCustomerProfile, updateCustomerProfile, CustomerProfile } from '../../services/api';
-import { verifyToken } from '../../services/auth';
+import { apiService } from '../../services/apiService';
+import { CustomerProfile } from '../../services/types';
 import { handleAuthError, getErrorMessage } from '../../utils/auth';
 
 const EditProfileScreen = () => {
@@ -28,15 +28,7 @@ const EditProfileScreen = () => {
     setError(null);
 
     try {
-      const isValidToken = await verifyToken();
-      
-      if (!isValidToken) {
-        setError('Sesi Anda telah berakhir, akan diarahkan ke halaman login');
-        await handleAuthError({ message: 'Token expired or invalid' });
-        return;
-      }
-
-      const profile = await fetchCustomerProfile();
+      const profile = await apiService.getCustomerProfile() as CustomerProfile;
       setFormData({
         nama_pelanggan: profile.nama_pelanggan,
         email: profile.email,
@@ -91,7 +83,7 @@ const EditProfileScreen = () => {
         updateData.password = formData.password;
       }
 
-      await updateCustomerProfile(updateData);
+      await apiService.updateCustomerProfile(updateData);
       
       Alert.alert(
         'Berhasil!',

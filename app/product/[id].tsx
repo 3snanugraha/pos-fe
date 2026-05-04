@@ -14,7 +14,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Navbar from "../../components/Navbar";
 import { useCart } from "../../contexts/CartContext";
 import { fetchProductById, Product } from "../../services/api";
-import { verifyToken } from "../../services/auth";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 
 const { width } = Dimensions.get("window");
@@ -37,15 +36,6 @@ const ProductDetailScreen = () => {
     setError(null);
 
     try {
-      // Verify token first
-      const isValidToken = await verifyToken();
-
-      if (!isValidToken) {
-        setError("Sesi Anda telah berakhir, akan diarahkan ke halaman login");
-        await handleAuthError({ message: "Token expired or invalid" });
-        return;
-      }
-
       const productData = await fetchProductById(productId);
       setProduct(productData);
 

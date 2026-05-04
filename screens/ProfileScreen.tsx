@@ -4,8 +4,9 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import Navbar from '../components/Navbar';
-import { fetchCustomerProfile, CustomerProfile } from '../services/api';
-import { logout, verifyToken } from '../services/auth';
+import { apiService } from '../services/apiService';
+import { CustomerProfile } from '../services/types';
+import { logout } from '../services/auth';
 import { handleAuthError, getErrorMessage } from '../utils/auth';
 
 const ProfileScreen = () => {
@@ -72,17 +73,8 @@ const ProfileScreen = () => {
     setError(null);
     
     try {
-      // Verify token first before loading data
-      const isValidToken = await verifyToken();
-      
-      if (!isValidToken) {
-        setError('Sesi Anda telah berakhir, akan diarahkan ke halaman login');
-        await handleAuthError({ message: 'Token expired or invalid' });
-        return;
-      }
-
-      const customerData = await fetchCustomerProfile();
-      setCustomer(customerData);
+      const customerData = await apiService.getCustomerProfile();
+      setCustomer(customerData as CustomerProfile);
     } catch (error: any) {
       console.error('Error loading customer data:', error);
       

@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import BannerSlider from '../components/BannerSlider';
-import { fetchBanners, fetchProducts, fetchProductCategories, Banner, Product, ProductCategory } from '../services/api';
-import { verifyToken } from '../services/auth';
+import { apiService } from '../services/apiService';
+import { Banner, Product, ProductCategory } from '../services/types';
 import { handleAuthError, getErrorMessage } from '../utils/auth';
 import { useCart } from '../contexts/CartContext';
 
@@ -54,20 +54,11 @@ const HomeScreen = () => {
     setError(null);
     
     try {
-      // Verify token first before loading data
-      const isValidToken = await verifyToken();
-      
-      if (!isValidToken) {
-        setError('Sesi Anda telah berakhir, akan diarahkan ke halaman login');
-        await handleAuthError({ message: 'Token expired or invalid' });
-        return;
-      }
-
       // Load semua data dashboard
       const [bannersData, categoriesData, productsResult] = await Promise.all([
-        fetchBanners(),
-        fetchProductCategories(),
-        fetchProducts({ per_page: 6 }) // Ambil 6 produk untuk featured
+        apiService.getBanners(),
+        apiService.getProductCategories(),
+        apiService.searchProducts({ per_page: 6 }) // Ambil 6 produk untuk featured
       ]);
       
       setBanners(bannersData);

@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Navbar from '../components/Navbar';
-import { fetchProducts, fetchProductCategories, Product, ProductCategory } from '../services/api';
-import { verifyToken } from '../services/auth';
+import { apiService } from '../services/apiService';
+import { Product, ProductCategory } from '../services/types';
 import { handleAuthError, getErrorMessage } from '../utils/auth';
 
 const ProductsScreen = () => {
@@ -25,21 +25,12 @@ const ProductsScreen = () => {
     setError(null);
     
     try {
-      // Verify token first before loading data
-      const isValidToken = await verifyToken();
-      
-      if (!isValidToken) {
-        setError('Sesi Anda telah berakhir, akan diarahkan ke halaman login');
-        await handleAuthError({ message: 'Token expired or invalid' });
-        return;
-      }
-
       // Load categories and products
       const [categoriesData, productsResult] = await Promise.all([
-        fetchProductCategories(),
-        fetchProducts({ 
+        apiService.getProductCategories(),
+        apiService.searchProducts({
           kategori_id: selectedCategory || undefined,
-          per_page: 20 
+          per_page: 20
         })
       ]);
       

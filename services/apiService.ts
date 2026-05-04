@@ -109,6 +109,29 @@ export class ApiService {
   }
 
   /**
+   * Get featured/recommended products
+   */
+  async getFeaturedProducts(limit = 6, useCache = true): Promise<Types.Product[]> {
+    if (useCache) {
+      return cacheManager.getOrSet(
+        `featured_products_${limit}`,
+        async () => {
+          const response = await httpClient.get<{ data: Types.Product[] }>(
+            `${API_ENDPOINTS.public.featuredProducts}?limit=${limit}`
+          );
+          return response.data;
+        },
+        CACHE_CONFIG.SHORT
+      );
+    }
+
+    const response = await httpClient.get<{ data: Types.Product[] }>(
+      `${API_ENDPOINTS.public.featuredProducts}?limit=${limit}`
+    );
+    return response.data;
+  }
+
+  /**
    * Get product by ID with caching
    */
   async getProduct(id: number, useCache = true): Promise<Types.Product> {

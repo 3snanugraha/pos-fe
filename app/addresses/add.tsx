@@ -12,8 +12,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Navbar from "../../components/Navbar";
-import { addCustomerAddress } from "../../services/api";
-import { verifyToken } from "../../services/auth";
+import { apiService } from "../../services/apiService";
 import { AddressCreateData } from "../../services/types";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 
@@ -80,18 +79,7 @@ const AddAddressScreen = () => {
     setLoading(true);
 
     try {
-      const isValidToken = await verifyToken();
-
-      if (!isValidToken) {
-        Alert.alert(
-          "Error",
-          "Sesi Anda telah berakhir, akan diarahkan ke halaman login"
-        );
-        await handleAuthError({ message: "Token expired or invalid" });
-        return;
-      }
-
-      await addCustomerAddress(formData);
+      await apiService.addCustomerAddress(formData);
 
       Alert.alert("Berhasil!", "Alamat berhasil ditambahkan", [
         {

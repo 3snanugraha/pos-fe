@@ -12,15 +12,8 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Navbar from "../../components/Navbar";
 import { useCart } from "../../contexts/CartContext";
-import {
-  createCustomerOrder,
-  CustomerAddress,
-  fetchCustomerAddresses,
-  fetchPaymentMethods,
-  PaymentMethod,
-  validatePromotion,
-} from "../../services/api";
-import { verifyToken } from "../../services/auth";
+import { apiService } from "../../services/apiService";
+import { CustomerAddress, PaymentMethod } from "../../services/types";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 
 const CheckoutScreen = () => {
@@ -55,17 +48,9 @@ const CheckoutScreen = () => {
     setError(null);
 
     try {
-      const isValidToken = await verifyToken();
-
-      if (!isValidToken) {
-        setError("Sesi Anda telah berakhir, akan diarahkan ke halaman login");
-        await handleAuthError({ message: "Token expired or invalid" });
-        return;
-      }
-
       const [addressesData, paymentMethodsData] = await Promise.all([
-        fetchCustomerAddresses(),
-        fetchPaymentMethods(),
+        apiService.getCustomerAddresses(),
+        apiService.getPaymentMethods(),
       ]);
 
       setAddresses(addressesData);
@@ -101,7 +86,7 @@ const CheckoutScreen = () => {
     }
 
     try {
-      const promoData = await validatePromotion(promoCode, totalAmount);
+      const promoData = await apiService.validatePromoCode(promoCode, totalAmount);
       setPromoDiscount(promoData.nilai_diskon);
       Alert.alert(
         "Berhasil!",
@@ -150,7 +135,7 @@ const CheckoutScreen = () => {
       console.log("=== DEBUG: Creating Order ===");
       console.log("Order data:", JSON.stringify(orderData, null, 2));
 
-      const result = await createCustomerOrder(orderData);
+      const result = await apiService.createOrder(orderData);
 
       console.log("Order creation result:", JSON.stringify(result, null, 2));
 

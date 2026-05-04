@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../../components/Navbar';
-import { fetchCustomerNotifications, Notification } from '../../services/api';
-import { verifyToken } from '../../services/auth';
+import { apiService } from '../../services/apiService';
+import { Notification } from '../../services/types';
 import { handleAuthError, getErrorMessage } from '../../utils/auth';
 
 const NotificationsScreen = () => {
@@ -66,15 +66,7 @@ const NotificationsScreen = () => {
     setError(null);
 
     try {
-      const isValidToken = await verifyToken();
-      
-      if (!isValidToken) {
-        setError('Sesi Anda telah berakhir, akan diarahkan ke halaman login');
-        await handleAuthError({ message: 'Token expired or invalid' });
-        return;
-      }
-
-      const result = await fetchCustomerNotifications({ per_page: 50 });
+      const result = await apiService.getNotifications({ per_page: 50 });
       setNotifications(result.data);
     } catch (error: any) {
       console.error('Error loading notifications:', error);
@@ -93,10 +85,19 @@ const NotificationsScreen = () => {
     setRefreshing(false);
   };
 
-  const handleNotificationPress = (notification: Notification) => {
-    // TODO: Implement mark as read functionality
-    console.log('Notification pressed:', notification.id);
-    
+  const handleNotificationPress = async (notification: Notification) => {
+    // Mark as read if not already read
+    if (!notification.is_read) {
+      try {
+        await apiService.markNotificationAsRead(notification.id);
+        setNotifications(prev =>
+          prev.map(n => n.id === notification.id ? { ...n, is_read: true } : n)
+        );
+      } catch (error) {
+        console.error('Error marking notification as read:', error);
+      }
+    }
+
     // Navigate based on notification type
     switch (notification.tipe) {
       case 'order':
@@ -124,12 +125,18 @@ const NotificationsScreen = () => {
         { text: 'Batal', style: 'cancel' },
         {
           text: 'Ya',
-          onPress: () => {
-            // TODO: Implement mark all as read API
-            setNotifications(prev => 
-              prev.map(notification => ({ ...notification, is_read: true }))
-            );
-            Alert.alert('Berhasil!', 'Semua notifikasi telah ditandai sebagai sudah dibaca');
+          onPress: async () => {
+            try {
+              const unreadIds = notifications.filter(n => !n.is_read).map(n => n.id);
+              await Promise.all(unreadIds.map(id => apiService.markNotificationAsRead(id)));
+              setNotifications(prev =>
+                prev.map(notification => ({ ...notification, is_read: true }))
+              );
+              Alert.alert('Berhasil!', 'Semua notifikasi telah ditandai sebagai sudah dibaca');
+            } catch (error) {
+              console.error('Error marking all as read:', error);
+              Alert.alert('Error', 'Gagal menandai notifikasi. Silakan coba lagi.');
+            }
           },
         },
       ]

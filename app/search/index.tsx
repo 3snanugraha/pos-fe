@@ -12,13 +12,8 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import Navbar from "../../components/Navbar";
-import {
-  fetchProductCategories,
-  fetchProducts,
-  Product,
-  ProductCategory,
-} from "../../services/api";
-import { verifyToken } from "../../services/auth";
+import { apiService } from "../../services/apiService";
+import { Product, ProductCategory } from "../../services/types";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 
 const SearchScreen = () => {
@@ -60,7 +55,7 @@ const SearchScreen = () => {
 
   const loadCategories = React.useCallback(async () => {
     try {
-      const categoriesData = await fetchProductCategories();
+      const categoriesData = await apiService.getProductCategories();
       setCategories(categoriesData);
     } catch (error: any) {
       console.error("Error loading categories:", error);
@@ -73,12 +68,6 @@ const SearchScreen = () => {
       setError(null);
 
       try {
-        const isValidToken = await verifyToken();
-
-        if (!isValidToken) {
-          setError("Sesi Anda telah berakhir, akan diarahkan ke halaman login");
-          await handleAuthError({ message: "Token expired or invalid" });
-          return;
         }
 
         const params: any = {
@@ -104,7 +93,7 @@ const SearchScreen = () => {
           params.max_price = parseInt(priceRange.max);
         }
 
-        const result = await fetchProducts(params);
+        const result = await apiService.searchProducts(params);
         setProducts(result.data);
       } catch (error: any) {
         console.error("Error searching products:", error);

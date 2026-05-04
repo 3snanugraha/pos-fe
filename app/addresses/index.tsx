@@ -4,14 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import Navbar from '../../components/Navbar';
-import { 
-  fetchCustomerAddresses, 
-  deleteCustomerAddress, 
-  updateCustomerAddress,
-  fetchCustomerProfile,
-  CustomerAddress 
-} from '../../services/api';
-import { verifyToken } from '../../services/auth';
+import { apiService } from '../../services/apiService';
+import { CustomerAddress } from '../../services/types';
 import { handleAuthError, getErrorMessage } from '../../utils/auth';
 
 const AddressManagementScreen = () => {
@@ -26,34 +20,7 @@ const AddressManagementScreen = () => {
     setError(null);
 
     try {
-      console.log('=== DEBUG: Starting to load addresses ===');
-      const isValidToken = await verifyToken();
-      console.log('Token validation result:', isValidToken);
-      
-      if (!isValidToken) {
-        console.log('Token invalid, setting error');
-        setError('Sesi Anda telah berakhir, akan diarahkan ke halaman login');
-        await handleAuthError({ message: 'Token expired or invalid' });
-        return;
-      }
-
-      // First check customer profile to see which customer we're logged in as
-      try {
-        const profile = await fetchCustomerProfile();
-        console.log('=== CURRENT CUSTOMER INFO ===');
-        console.log('Customer ID:', profile.id);
-        console.log('Customer Name:', profile.nama_pelanggan);
-        console.log('Customer Email:', profile.email);
-        console.log('Customer Code:', profile.kode_pelanggan);
-      } catch (profileError) {
-        console.error('Error fetching customer profile:', profileError);
-      }
-      
-      console.log('About to call fetchCustomerAddresses...');
-      const addressesData = await fetchCustomerAddresses();
-      console.log('Received addresses data:', addressesData);
-      console.log('Addresses count:', addressesData.length);
-      
+      const addressesData = await apiService.getCustomerAddresses();
       setAddresses(addressesData);
     } catch (error: any) {
       console.error('Error loading addresses:', error);
@@ -82,7 +49,7 @@ const AddressManagementScreen = () => {
 
     try {
       // Set this address as default
-      await updateCustomerAddress(address.id, { is_default: true });
+      await apiService.updateCustomerAddress(address.id, { is_default: true });
       
       // Update local state
       setAddresses(prev => 
@@ -119,7 +86,7 @@ const AddressManagementScreen = () => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await deleteCustomerAddress(address.id);
+              await apiService.deleteCustomerAddress(address.id);
               setAddresses(prev => prev.filter(addr => addr.id !== address.id));
               Alert.alert('Berhasil!', 'Alamat berhasil dihapus');
             } catch (error: any) {

@@ -12,15 +12,9 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import BannerSlider from "../../components/BannerSlider";
 import { useCart } from "../../contexts/CartContext";
-import {
-  Banner,
-  fetchBanners,
-  fetchProductCategories,
-  fetchProducts,
-  Product,
-  ProductCategory,
-} from "../../services/api";
-import { getUserData, verifyToken } from "../../services/auth";
+import { apiService } from "../../services/apiService";
+import { Banner, Product, ProductCategory } from "../../services/types";
+import { getUserData } from "../../services/auth";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 
 const HomeScreen = () => {
@@ -71,15 +65,6 @@ const HomeScreen = () => {
     setError(null);
 
     try {
-      // Verify token first before loading data
-      const isValidToken = await verifyToken();
-
-      if (!isValidToken) {
-        setError("Sesi Anda telah berakhir, akan diarahkan ke halaman login");
-        await handleAuthError({ message: "Token expired or invalid" });
-        return;
-      }
-
       // Get customer name from stored data first (faster)
       try {
         const userData = await getUserData();
@@ -90,35 +75,19 @@ const HomeScreen = () => {
         console.log("Could not get stored user data");
       }
 
-      // Load semua data dashboard
-      // Use public endpoints for better performance
+      // Load banners and categories in parallel
       const [bannersData, categoriesData] = await Promise.all([
-        fetchBanners(),
-        fetchProductCategories(),
+        apiService.getBanners(),
+        apiService.getProductCategories(),
       ]);
 
-      // Load featured products separately to handle different response structure
+      // Load featured products with fallback
       try {
-        const response = await fetch(
-          `http://192.168.100.36:8000/api/public/featured-products?limit=6`,
-          {
-            headers: {
-              Accept: "application/json",
-            },
-          }
-        );
-
-        if (response.ok) {
-          const featuredResult = await response.json();
-          setFeaturedProducts(featuredResult.data || []);
-        } else {
-          // Fallback to regular products if featured products not available
-          const productsResult = await fetchProducts({ per_page: 6 });
-          setFeaturedProducts(productsResult.data);
-        }
+        const products = await apiService.getFeaturedProducts(6);
+        setFeaturedProducts(products);
       } catch {
         console.log("Featured products not available, using regular products");
-        const productsResult = await fetchProducts({ per_page: 6 });
+        const productsResult = await apiService.searchProducts({ per_page: 6 });
         setFeaturedProducts(productsResult.data);
       }
 

@@ -62,6 +62,7 @@ export const API_ENDPOINTS = {
     products: "/public/products",
     productDetail: (id: number) => `/public/products/${id}`,
     categories: "/public/product-categories",
+    featuredProducts: "/public/featured-products",
   },
 
   // Customer Authentication
@@ -121,6 +122,7 @@ export const CACHE_CONFIG = {
     profile: "cache_profile",
     dashboard: "cache_dashboard",
     paymentMethods: "cache_payment_methods",
+    featuredProducts: "cache_featured_products",
   },
 } as const;
 

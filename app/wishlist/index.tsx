@@ -14,7 +14,6 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import Navbar from "../../components/Navbar";
 import { useCart } from "../../contexts/CartContext";
 import { apiService } from "../../services/apiService";
-import { verifyToken } from "../../services/auth";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 
 // Temporary interface matching backend response
@@ -58,14 +57,6 @@ const WishlistScreen = () => {
     setError(null);
 
     try {
-      const isValidToken = await verifyToken();
-
-      if (!isValidToken) {
-        setError("Sesi Anda telah berakhir, akan diarahkan ke halaman login");
-        await handleAuthError({ message: "Token expired or invalid" });
-        return;
-      }
-
       const result = (await apiService.getWishlist({ per_page: 50 })) as any;
 
       // API returns array directly from backend response.data

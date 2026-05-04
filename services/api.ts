@@ -1,3 +1,9 @@
+/**
+ * @deprecated This file is kept for backward compatibility only.
+ * Use apiService.ts for new code. It provides caching, retry logic,
+ * and consistent error handling via httpClient.
+ */
+
 import { router } from "expo-router";
 import { getToken, logout } from "./auth";
 import { API_CONFIG } from "./config";

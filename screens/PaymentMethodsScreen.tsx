@@ -4,8 +4,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import Navbar from '../components/Navbar';
 import PaymentMethodCard from '../components/PaymentMethodCard';
 import Button from '../components/Button';
-import { fetchPaymentMethods, PaymentMethod } from '../services/api';
-import { verifyToken } from '../services/auth';
+import { apiService } from '../services/apiService';
+import { PaymentMethod } from '../services/types';
 import { handleAuthError, getErrorMessage } from '../utils/auth';
 
 const PaymentMethodsScreen = () => {
@@ -20,16 +20,7 @@ const PaymentMethodsScreen = () => {
     setError(null);
     
     try {
-      // Verify token first before loading data
-      const isValidToken = await verifyToken();
-      
-      if (!isValidToken) {
-        setError('Sesi Anda telah berakhir, akan diarahkan ke halaman login');
-        await handleAuthError({ message: 'Token expired or invalid' });
-        return;
-      }
-
-      const methods = await fetchPaymentMethods();
+      const methods = await apiService.getPaymentMethods();
       setPaymentMethods(methods);
       if (methods.length > 0) {
         setSelectedMethod(methods[0].id);
