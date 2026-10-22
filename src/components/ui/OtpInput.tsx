@@ -133,7 +133,9 @@ export function OtpInput({
               maxLength={length}
               selectTextOnFocus
               accessibilityLabel={
-                accessibilityLabel + " " + teks.a11y.kodeOtp.replace("{index}", String(i + 1))
+                accessibilityLabel
+                  ? `${accessibilityLabel}, ${teks.a11y.kodeOtp.replace("{index}", String(i + 1))}`
+                  : teks.a11y.kodeOtp.replace("{index}", String(i + 1))
               }
               className={`font-inter-semibold text-xl text-neutral-900 text-center rounded-md border ${border} ${editable ? "bg-white" : "bg-neutral-100"}`}
               style={{

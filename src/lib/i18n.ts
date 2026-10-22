@@ -88,6 +88,33 @@ export const teks = {
     pencarian: "Pencarian",
   },
 
+  /** Layar auth (onboarding, masuk, daftar, lupa password, kode, reset). */
+  auth: {
+    onboarding: {
+      judul: "Belanja Lebih Mudah, Setiap Hari",
+      deskripsi:
+        "Temukan produk pilihan, simpan favorit, dan pantau pesanan Anda dalam satu aplikasi.",
+      poin: {
+        produk: "Ribuan produk siap kirim",
+        poin: "Kumpulkan poin tiap belanja",
+        pesanan: "Lacak pesanan real-time",
+      },
+      lewati: "Lewati",
+    },
+    belumPunyaAkun: "Belum punya akun?",
+    sudahPunyaAkun: "Sudah punya akun?",
+    daftarSekarang: "Daftar Sekarang",
+    masukSekarang: "Masuk Sekarang",
+    ingatSaya: "Ingat saya",
+    kirimKodeKe: "Kode 4 digit dikirim ke {email}",
+    kodeTerkirim: "Kode verifikasi sudah dikirim. Periksa email Anda.",
+    passwordDiubah: "Password berhasil diubah. Silakan masuk.",
+    cekEmail: "Periksa kotak masuk email Anda untuk instruksi selanjutnya.",
+    kataSandiLemah: "Gunakan minimal 8 karakter dengan huruf dan angka.",
+    syaratKetentuan:
+      "Dengan mendaftar, Anda menyetujui Syarat & Ketentuan serta Kebijakan Privasi kami.",
+  },
+
   /** Judul layar & label section. */
   judul: {
     home: "Beranda",
@@ -174,6 +201,13 @@ export const teks = {
     stokTidakCukup: "Stok tidak mencukupi",
     muatGagal: "Gagal memuat data",
     simpanGagal: "Gagal menyimpan perubahan",
+    emailTidakTerdaftar: "Email tidak terdaftar",
+    emailSudahDipakai: "Email sudah terdaftar",
+    teleponSudahDipakai: "Nomor telepon sudah terdaftar",
+    akunTidakAktif: "Akun Anda tidak aktif. Hubungi admin.",
+    terlaluBanyakPercobaan: "Terlalu banyak percobaan. Coba lagi nanti.",
+    fiturBelumTersedia:
+      "Fitur atur ulang password belum aktif di server. Hubungi admin toko untuk reset manual.",
   },
 
   /** Empty state (copy resmi kit, guideline §5, versi Indonesia). */
