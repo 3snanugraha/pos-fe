@@ -364,6 +364,7 @@ export const teks = {
     mulaiCari: "Mulai Cari Produk",
     mulaiCariDeskripsi: "Ketik nama produk, merek, atau kategori yang Anda cari.",
     riwayatKosong: "Belum ada pencarian terakhir.",
+    ulangiCari: "Atur Ulang Pencarian",
   },
 
   /** Detail produk (W3). */

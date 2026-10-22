@@ -234,7 +234,6 @@ export default function SearchScreen() {
           value={searchQuery}
           onChangeText={setSearchQuery}
           onSubmit={() => searchProducts({ query: searchQuery })}
-          onBack={() => router.back()}
           autoFocus={!initialQuery}
           tanpaAksiSuara
         />
@@ -486,8 +485,11 @@ export default function SearchScreen() {
             onCtaPress={() => searchProducts({ query: searchQuery })}
           />
         </View>
-      ) : modeSaran && saran.length > 0 ? (
-        /* Daftar saran — baris 52, thumbnail 28, teks tebal pada bagian cocok. */
+      ) : modeSaran ? (
+        /* Daftar saran — baris 52, thumbnail 28, teks tebal pada bagian cocok.
+           Bila tidak ada saran yang cocok, tetap tampilkan satu baris "cari
+           persis" agar pengguna tidak melihat "tidak ada hasil" sebelum
+           benar-benar mencari. */
         <ScrollView keyboardShouldPersistTaps="handled" className="flex-1">
           <Text className="px-4 pb-1 pt-4 font-inter-semibold text-xs text-neutral-500">
             {teks.pencarian.saran}
@@ -500,6 +502,13 @@ export default function SearchScreen() {
               onPress={() => jalankanPencarian(s)}
             />
           ))}
+          {saran.length === 0 ? (
+            <BarisSaran
+              teksSaran={searchQuery.trim()}
+              query={searchQuery}
+              onPress={() => searchProducts({ query: searchQuery })}
+            />
+          ) : null}
         </ScrollView>
       ) : products.length === 0 ? (
         <View className="flex-1 justify-center px-4">
@@ -507,12 +516,23 @@ export default function SearchScreen() {
             icon={<Search size={36} color={colors.primary600} strokeWidth={1.75} />}
             title={teks.empty.pencarian.judul}
             description={teks.empty.pencarian.deskripsi}
-            ctaLabel={teks.tombol.belanjaSekarang}
-            onCtaPress={() => {
-              setSearchQuery("");
-              resetFilter();
-            }}
-          />
+          >
+            <Pressable
+              onPress={() => {
+                setSearchQuery("");
+                resetFilter();
+              }}
+              accessibilityRole="button"
+              accessibilityLabel={teks.pencarian.ulangiCari}
+              hitSlop={sizes.hitSlop}
+              className="mt-6"
+              style={{ minHeight: sizes.minTouchTarget }}
+            >
+              <Text className="font-inter-medium text-sm text-primary-700">
+                {teks.pencarian.ulangiCari}
+              </Text>
+            </Pressable>
+          </EmptyState>
         </View>
       ) : (
         <FlatList

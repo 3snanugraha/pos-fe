@@ -56,11 +56,8 @@ export function ProductCardGrid({ produk, onPress, width, className = "" }: Prod
       onPress={onPress}
       accessibilityRole="button"
       accessibilityLabel={labelA11y}
-      className={`rounded-lg border border-neutral-100 bg-white p-2 active:opacity-95 ${className}`}
-      style={({ pressed }) => [
-        width ? { width } : { flex: 1 },
-        pressed ? { transform: [{ scale: 0.98 }] } : null,
-      ]}
+      className={`rounded-lg border border-neutral-100 bg-white p-2 active:opacity-95 active:scale-95 ${className}`}
+      style={width ? { width } : { flex: 1 }}
     >
       <View
         className="overflow-hidden rounded-lg bg-neutral-50"

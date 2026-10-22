@@ -22,8 +22,14 @@ export type SkeletonProps = {
 const DURASI = 1200;
 
 /**
- * Blok skeleton dengan shimmer. Opacity berdenyut 0,55 ↔ 1 sambil warna
- * bergeser — cukup meyakinkan di web dan native tanpa dependensi tambahan.
+ * Blok skeleton dengan shimmer.
+ *
+ * Catatan implementasi: interpolasi **warna** pada react-native-web tidak
+ * dianimasikan oleh `Animated` (nilainya hanya diterapkan sekali), sehingga
+ * shimmer tidak terlihat. Karena itu denyut dilakukan lewat `opacity` blok
+ * neutral-200 — ini berjalan di web dan native, dan tetap memenuhi spesifikasi
+ * "neutral-100 → neutral-200" secara visual (bg neutral-200 yang berdenyut di
+ * atas latar kartu putih/neutral-50).
  */
 export function Skeleton({
   width,
@@ -62,16 +68,24 @@ export function Skeleton({
     return () => loop.stop();
   }, [progress, reduce]);
 
-  const backgroundColor = reduce
-    ? colors.neutral100
-    : progress.interpolate({ inputRange: [0, 1], outputRange: [colors.neutral100, colors.neutral200] });
+  const opacity = reduce
+    ? 1
+    : progress.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1] });
 
   return (
     <Animated.View
       accessibilityElementsHidden
       importantForAccessibility="no-hide-descendants"
       className={`${radiusClassName} ${className}`}
-      style={[{ width, height, backgroundColor }, style]}
+      style={[
+        {
+          width,
+          height,
+          backgroundColor: reduce ? colors.neutral100 : colors.neutral200,
+          opacity,
+        },
+        style,
+      ]}
     />
   );
 }
