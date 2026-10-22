@@ -35,8 +35,14 @@ interface SplitRow {
 
 const CheckoutScreen = () => {
   const router = useRouter();
-  const { items, totalAmount, clearCart, removeItem, updateItemQuantity } =
-    useCart();
+  const {
+    items,
+    totalAmount,
+    clearCart,
+    removeItem,
+    updateItemQuantity,
+    isLoading: cartLoading,
+  } = useCart();
 
   const [step, setStep] = useState(1); // 1: Address, 2: Payment, 3: Order Summary
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
@@ -106,6 +112,14 @@ const CheckoutScreen = () => {
     // sengaja dikosongkan) maupun saat proses submit masih berjalan.
     if (orderPlacedRef.current || isProcessingOrder) return;
 
+    /**
+     * Keranjang dibaca dari AsyncStorage secara asinkron. Sebelum hidrasi
+     * selesai, `items` selalu `[]` — tanpa penjagaan ini pengguna yang membuka
+     * /checkout langsung (atau me-refresh) selalu disambut dialog "Keranjang
+     * Kosong" padahal keranjangnya berisi.
+     */
+    if (cartLoading) return;
+
     if (items.length === 0) {
       Alert.alert(
         "Keranjang Kosong",
@@ -116,7 +130,7 @@ const CheckoutScreen = () => {
     }
 
     loadCheckoutData();
-  }, [items.length, isProcessingOrder, router]);
+  }, [items.length, isProcessingOrder, cartLoading, router]);
 
   const handleApplyPromo = async () => {
     if (!promoCode.trim()) {
