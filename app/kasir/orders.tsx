@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   XCircle,
 } from "lucide-react-native";
+import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
   Linking,
@@ -67,6 +68,7 @@ interface KasirOrder {
  * dilokalisasi. Konfirmasi tidak memakai `Alert` (callback tidak jalan di web).
  */
 export default function KasirOrdersScreen() {
+  const router = useRouter();
   const [staff, setStaff] = useState<StaffUser | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [email, setEmail] = useState("");
@@ -263,7 +265,7 @@ export default function KasirOrdersScreen() {
   if (checkingSession) {
     return (
       <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
-        <AppBar title={teks.kasir.judul} showBack={false} />
+        <AppBar title={teks.kasir.judul} onBack={() => router.back()} />
         <View className="px-4 pt-4">
           <View className="rounded-lg border border-neutral-200 bg-white p-4">
             <Skeleton height={16} width="45%" />
@@ -280,7 +282,7 @@ export default function KasirOrdersScreen() {
   if (!staff) {
     return (
       <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
-        <AppBar title={teks.kasir.judulLengkap} onBack={() => undefined} />
+        <AppBar title={teks.kasir.judulLengkap} onBack={() => router.back()} />
         <ScrollView
           className="flex-1"
           contentContainerStyle={{ padding: 16 }}
@@ -359,7 +361,7 @@ export default function KasirOrdersScreen() {
     <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
       <AppBar
         title={teks.kasir.judul}
-        onBack={() => undefined}
+        onBack={() => router.back()}
         right={
           <Pressable
             onPress={handleLogout}
