@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import Navbar from "../../components/Navbar";
 import { useCart } from "../../contexts/CartContext";
-import { fetchProductById, Product } from "../../services/api";
+import { addToWishlist, fetchProductById, Product } from "../../services/api";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 
 const { width } = Dimensions.get("window");
@@ -100,17 +100,30 @@ const ProductDetailScreen = () => {
     }
   };
 
-  const handleBuyNow = () => {
+  /**
+   * "Beli Sekarang" — tambahkan produk (qty & varian terpilih) ke keranjang
+   * lalu langsung ke checkout. Sebelumnya param `productId` dikirim ke
+   * `/checkout` padahal layar itu tidak pernah membacanya, sehingga produk
+   * tidak pernah masuk keranjang.
+   */
+  const handleBuyNow = async () => {
     if (!product) return;
 
-    // TODO: Implement buy now functionality (go to checkout)
-    router.push({
-      pathname: "/checkout",
-      params: {
-        productId: product.id.toString(),
-        quantity: quantity.toString(),
-      },
-    });
+    if (product.varian && product.varian.length > 0 && !selectedVariant) {
+      Alert.alert("Pilih Varian", "Silakan pilih varian produk terlebih dahulu");
+      return;
+    }
+
+    try {
+      const variantToAdd = selectedVariant
+        ? { ...selectedVariant, harga: selectedVariant.harga_jual }
+        : undefined;
+
+      await addItem(product, quantity, variantToAdd);
+      router.push("/checkout");
+    } catch (error: any) {
+      Alert.alert("Error", error?.message ?? "Gagal menambahkan ke keranjang");
+    }
   };
 
   const formatPrice = (price: number | string | null | undefined) => {
