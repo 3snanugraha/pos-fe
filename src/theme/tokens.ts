@@ -64,6 +64,7 @@ export const colors = {
   neutral800: neutral[800],
   neutral900: neutral[900],
   success100: success[100],
+  success500: success[500],
   success700: success[700],
   warning50: warning[50],
   warning500: warning[500],
