@@ -1,24 +1,49 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Image } from "expo-image";
+import {
+  Ban,
+  CreditCard,
+  ImageIcon,
+  MapPin,
+  Printer,
+  Receipt,
+  StickyNote,
+  Wallet,
+} from "lucide-react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
   Alert,
-  Image,
   Linking,
-  Pressable,
+  RefreshControl,
   ScrollView,
   Text,
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Navbar from "../../components/Navbar";
+import {
+  ErrorState,
+  OrderTimeline,
+  PriceSummary,
+  Skeleton,
+  StatusBadge,
+} from "../../src/components/commerce";
+import { AppBar } from "../../src/components/layout";
+import { Button, Dialog } from "../../src/components/ui";
+import { rupiah, tanggalWaktu } from "../../src/lib/format";
+import { teks } from "../../src/lib/i18n";
+import {
+  bisaDibatalkan,
+  indeksTimeline,
+  infoStatus,
+  latarNada,
+  warnaNada,
+} from "../../src/lib/pesanan";
+import { colors } from "../../src/theme/tokens";
 import { apiService } from "../../services/apiService";
-import { OrderDetail } from "../../services/types";
-import { formatDateTime, useOrderExpiry } from "../../utils/orderExpiry";
+import type { OrderDetail } from "../../services/types";
+import { useOrderExpiry } from "../../utils/orderExpiry";
 import {
   buildPaymentInstruction,
-  formatRupiah,
   isTransfer,
   jenisLabel,
   parseSplitFromCatatan,
@@ -26,90 +51,64 @@ import {
 } from "../../utils/payment";
 import { printOrderReceipt } from "../../utils/printReceipt";
 
-const formatPrice = formatRupiah;
+type DialogBatal = "konfirmasi" | null;
 
-const STATUS_COLORS: { [key: string]: { bg: string; text: string } } = {
-  pending: { bg: "bg-yellow-100", text: "text-yellow-700" },
-  selesai: { bg: "bg-green-100", text: "text-green-700" },
-  completed: { bg: "bg-green-100", text: "text-green-700" },
-  dibatalkan: { bg: "bg-red-100", text: "text-red-700" },
-  cancelled: { bg: "bg-red-100", text: "text-red-700" },
-  retur: { bg: "bg-purple-100", text: "text-purple-700" },
-  // status lama
-  confirmed: { bg: "bg-blue-100", text: "text-blue-700" },
-  processing: { bg: "bg-indigo-100", text: "text-indigo-700" },
-  shipped: { bg: "bg-purple-100", text: "text-purple-700" },
-  delivered: { bg: "bg-green-100", text: "text-green-700" },
-};
-
-const STATUS_LABELS: { [key: string]: string } = {
-  pending: "Menunggu Verifikasi Kasir",
-  selesai: "Selesai / Diterima Kasir",
-  completed: "Selesai",
-  dibatalkan: "Dibatalkan / Ditolak",
-  cancelled: "Dibatalkan",
-  retur: "Diretur",
-  confirmed: "Dikonfirmasi",
-  processing: "Diproses",
-  shipped: "Dikirim",
-  delivered: "Selesai",
-};
-
-const STATUS_ICONS: { [key: string]: keyof typeof Ionicons.glyphMap } = {
-  pending: "time-outline",
-  selesai: "checkmark-done-circle-outline",
-  completed: "checkmark-done-circle-outline",
-  dibatalkan: "close-circle-outline",
-  cancelled: "close-circle-outline",
-  retur: "return-down-back-outline",
-  confirmed: "checkmark-circle-outline",
-  processing: "cog-outline",
-  shipped: "car-outline",
-  delivered: "checkmark-done-circle-outline",
-};
-
-const STATUS_TEXT_COLOR: { [key: string]: string } = {
-  "text-yellow-700": "#B45309",
-  "text-blue-700": "#1D4ED8",
-  "text-indigo-700": "#4338CA",
-  "text-purple-700": "#7C3AED",
-  "text-green-700": "#15803D",
-  "text-red-700": "#DC2626",
-};
-
-/** Tahapan status yang dilihat pelanggan. */
-const TIMELINE = [
-  { key: "pending", label: "Order dibuat", desc: "Menunggu verifikasi kasir" },
-  { key: "selesai", label: "Diterima & diproses", desc: "Kasir memverifikasi pesanan" },
-  { key: "finish", label: "Selesai", desc: "Pembayaran lunas" },
-];
-
-const OrderDetailScreen = () => {
+/**
+ * Detail Pesanan Zovora — guideline §3.12 (ringkasan harga), §3.13 (alamat),
+ * §3.14 (instruksi pembayaran), §5 (state).
+ *
+ * Susunan: kartu status (badge + tanggal + nomor, countdown kedaluwarsa,
+ * timeline 3 tahap) → instruksi pembayaran (bila masih `pending`) → daftar
+ * produk → alamat → metode pembayaran + rincian split → catatan → ringkasan
+ * harga (`PriceSummary`) → aksi (primary "Cetak Struk", outline "Kembali ke
+ * Riwayat", danger "Batalkan Pesanan"). Semua logika (polling status,
+ * `cancelOrder`, `printOrderReceipt`, instruksi rekening) dipertahankan.
+ */
+export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
+  const router = useRouter();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [cancelling, setCancelling] = useState(false);
   const [printing, setPrinting] = useState(false);
-  const [refreshing, setRefreshing] = useState(false);
-  const router = useRouter();
+  const [dialogBatal, setDialogBatal] = useState<DialogBatal>(null);
+  const [pesanAksi, setPesanAksi] = useState<{
+    judul: string;
+    isi: string;
+    aksi?: { label: string; onPress: () => void };
+  } | null>(null);
 
-  const loadOrder = useCallback(async () => {
-    if (!id) return;
+  const loadOrder = useCallback(async (): Promise<{
+    order: OrderDetail | null;
+    galat: string | null;
+  }> => {
+    if (!id) return { order: null, galat: teks.error.muatGagal };
     try {
       const result = await apiService.getOrderDetails(parseInt(id, 10));
-      const orderData = (result as any)?.data || result;
-      setOrder(orderData as OrderDetail);
-    } catch (error) {
-      console.error("Error loading order:", error);
-      Alert.alert("Error", "Gagal memuat detail pesanan");
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
+      const data =
+        (result as unknown as { data?: OrderDetail })?.data ??
+        (result as unknown as OrderDetail);
+      return { order: data as OrderDetail, galat: null };
+    } catch (err: any) {
+      console.error("Error loading order:", err);
+      return { order: null, galat: teks.error.muatGagal };
     }
   }, [id]);
 
   useEffect(() => {
-    loadOrder();
+    let aktif = true;
+    (async () => {
+      const hasil = await loadOrder();
+      if (!aktif) return;
+      setOrder(hasil.order);
+      setError(hasil.galat);
+      setLoading(false);
+    })();
+    return () => {
+      aktif = false;
+    };
   }, [loadOrder]);
 
   const status = (order?.status_transaksi ?? order?.status ?? "pending") as string;
@@ -117,45 +116,50 @@ const OrderDetailScreen = () => {
 
   /** Segarkan otomatis saat kasir memverifikasi/menolak order. */
   useEffect(() => {
-    if (!order) return;
-    if (status !== "pending") return;
-
+    if (!order || status !== "pending") return;
     const poll = setInterval(() => {
-      loadOrder();
+      void loadOrder().then((hasil) => {
+        if (hasil.order) setOrder(hasil.order);
+      });
     }, 20000);
-
     return () => clearInterval(poll);
   }, [order, status, loadOrder]);
 
-  const handleCancelOrder = () => {
+  const muatUlang = async () => {
+    setLoading(true);
+    const hasil = await loadOrder();
+    setOrder(hasil.order);
+    setError(hasil.galat);
+    setLoading(false);
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    const hasil = await loadOrder();
+    setOrder(hasil.order);
+    setError(hasil.galat);
+    setRefreshing(false);
+  };
+
+  const handleCancel = async () => {
     if (!order) return;
-    Alert.alert(
-      "Batalkan Pesanan",
-      "Apakah Anda yakin ingin membatalkan pesanan ini?",
-      [
-        { text: "Tidak", style: "cancel" },
-        {
-          text: "Ya, Batalkan",
-          style: "destructive",
-          onPress: async () => {
-            setCancelling(true);
-            try {
-              await apiService.cancelOrder(order.id);
-              await loadOrder();
-              Alert.alert("Berhasil", "Pesanan telah dibatalkan");
-            } catch (error: any) {
-              console.error("Error cancelling order:", error);
-              Alert.alert(
-                "Error",
-                error?.message || "Gagal membatalkan pesanan. Silakan coba lagi."
-              );
-            } finally {
-              setCancelling(false);
-            }
-          },
-        },
-      ]
-    );
+    setCancelling(true);
+    try {
+      await apiService.cancelOrder(order.id);
+      const hasil = await loadOrder();
+      setOrder(hasil.order);
+      setDialogBatal(null);
+      setPesanAksi({ judul: teks.umum.berhasil, isi: teks.pesanan.batalBerhasil });
+    } catch (err: any) {
+      console.error("Error cancelling order:", err);
+      setDialogBatal(null);
+      setPesanAksi({
+        judul: teks.umum.gagal,
+        isi: err?.message || teks.pesanan.batalGagal,
+      });
+    } finally {
+      setCancelling(false);
+    }
   };
 
   const handlePrint = async () => {
@@ -173,7 +177,7 @@ const OrderDetailScreen = () => {
         total_bayar: Number(order.total_bayar) || 0,
         status: order.status,
         metode_pembayaran: {
-          nama: order.metode_pembayaran?.nama ?? "Tunai",
+          nama: order.metode_pembayaran?.nama ?? teks.checkout.cod,
           jenis: order.metode_pembayaran?.jenis ?? "tunai",
         },
         alamat_pengiriman: order.alamat_pengiriman ?? null,
@@ -189,79 +193,92 @@ const OrderDetailScreen = () => {
 
       if (hasil.ok) {
         if (hasil.mode === "browser") {
-          Alert.alert(
-            "Struk diunduh",
-            "Berkas struk ESC/POS (.bin) tersimpan di folder unduhan. Kirim ke printer thermal lewat RawBT (menu Print File) atau driver printer."
-          );
+          setPesanAksi({
+            judul: teks.pesanan.struk.diunduhJudul,
+            isi: teks.pesanan.struk.diunduhDeskripsi,
+          });
         }
         return;
       }
 
       if (hasil.reason === "no-app") {
-        Alert.alert(
-          "Aplikasi Tidak Ditemukan",
-          "Untuk mencetak struk, silakan install aplikasi RawBT atau Thermer dari Play Store.",
-          [
-            { text: "Batal", style: "cancel" },
-            {
-              text: "Buka Play Store",
-              onPress: () => {
-                Linking.openURL("market://details?id=ru.a402d.rawbtprinter").catch(
-                  () => {}
-                );
-              },
+        setPesanAksi({
+          judul: teks.pesanan.struk.appJudul,
+          isi: teks.pesanan.struk.appDeskripsi,
+          aksi: {
+            label: teks.pesanan.struk.bukaPlayStore,
+            onPress: () => {
+              Linking.openURL("market://details?id=ru.a402d.rawbtprinter").catch(() => {});
             },
-          ]
-        );
+          },
+        });
         return;
       }
 
-      Alert.alert("Error", hasil.message || "Gagal mencetak struk");
-    } catch (error) {
-      console.error("Print error:", error);
-      Alert.alert("Error", "Gagal mencetak struk");
+      setPesanAksi({
+        judul: teks.umum.gagal,
+        isi: hasil.message || teks.pesanan.struk.gagal,
+      });
+    } catch (err) {
+      console.error("Print error:", err);
+      setPesanAksi({ judul: teks.umum.gagal, isi: teks.pesanan.struk.gagal });
     } finally {
       setPrinting(false);
     }
   };
 
-  const handleRefresh = async () => {
-    setRefreshing(true);
-    await loadOrder();
-  };
-
   if (loading) {
     return (
-      <SafeAreaView className="flex-1 bg-background" edges={["top", "left", "right"]}>
-        <Navbar title="Detail Pesanan" showBackButton={true} />
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#3B82F6" />
+      <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
+        <AppBar title={teks.pesanan.detail} onBack={() => router.back()} />
+        <View className="px-4 pt-4">
+          <View className="rounded-lg border border-neutral-200 bg-white p-4">
+            <Skeleton height={16} width="60%" />
+            <Skeleton height={12} width="40%" className="mt-2" />
+            <Skeleton height={48} width="100%" className="mt-4" />
+          </View>
+          <View className="mt-3 rounded-lg border border-neutral-200 bg-white p-4">
+            {[0, 1].map((i) => (
+              <View key={i} className="mb-3 flex-row gap-3">
+                <Skeleton width={56} height={56} radiusClassName="rounded-md" />
+                <View className="flex-1">
+                  <Skeleton height={14} width="80%" />
+                  <Skeleton height={12} width="40%" className="mt-2" />
+                </View>
+              </View>
+            ))}
+          </View>
+          <Skeleton height={120} radiusClassName="rounded-lg" width="100%" className="mt-3" />
         </View>
+      </SafeAreaView>
+    );
+  }
+
+  if (error && !order) {
+    return (
+      <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
+        <AppBar title={teks.pesanan.detail} onBack={() => router.back()} />
+        <ErrorState pesan={error} onRetry={muatUlang} />
       </SafeAreaView>
     );
   }
 
   if (!order) {
     return (
-      <SafeAreaView className="flex-1 bg-background" edges={["top", "left", "right"]}>
-        <Navbar title="Detail Pesanan" showBackButton={true} />
-        <View className="flex-1 justify-center items-center px-4">
-          <Ionicons name="receipt-outline" size={64} color="#9CA3AF" />
-          <Text className="text-gray-500 mt-4 text-center">
-            Pesanan tidak ditemukan
-          </Text>
-        </View>
+      <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
+        <AppBar title={teks.pesanan.detail} onBack={() => router.back()} />
+        <ErrorState
+          judul={teks.pesanan.tidakDitemukan.judul}
+          pesan={teks.pesanan.tidakDitemukan.deskripsi}
+          onRetry={muatUlang}
+          ikon={<Receipt size={36} color={colors.danger700} strokeWidth={1.75} />}
+        />
       </SafeAreaView>
     );
   }
 
-  const statusColor = STATUS_COLORS[status] || STATUS_COLORS.pending;
-  const statusLabel = expiry.expired
-    ? "Kedaluwarsa — menunggu pembatalan kasir"
-    : STATUS_LABELS[status] || status;
-  const statusIcon = STATUS_ICONS[status] || "help-circle-outline";
-  const canCancel = status === "pending" || status === "confirmed";
-
+  const info = infoStatus(status);
+  const IkonStatus = info.ikon;
   const metode = order.metode_pembayaran;
   const instruksi = metode
     ? buildPaymentInstruction({
@@ -274,214 +291,226 @@ const OrderDetailScreen = () => {
     : [];
   const splitInfo = parseSplitFromCatatan(order.catatan);
   const catatanBersih = stripSplitFromCatatan(order.catatan);
-
-  const timelineIndex =
-    status === "selesai" || status === "completed" || status === "delivered"
-      ? 2
-      : status === "pending"
-        ? 0
-        : -1;
+  const timeline = indeksTimeline(status);
+  const bisaBatal = bisaDibatalkan(status);
+  const nomor = order.nomor_transaksi || `#${order.id}`;
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={["top", "left", "right"]}>
-      <Navbar title={`Pesanan #${order.id}`} showBackButton={true} />
+    <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
+      <AppBar title={teks.pesanan.detail} onBack={() => router.back()} />
+
       <ScrollView
         className="flex-1"
+        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
         refreshControl={
-          <Pressable onPress={handleRefresh}>
-            <Text className="text-center text-primary py-2 text-xs">
-              {refreshing ? "Memuat ulang..." : "Tarik / ketuk untuk memuat ulang"}
-            </Text>
-          </Pressable>
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary600]}
+            tintColor={colors.primary600}
+          />
         }
       >
-        {/* Status Header */}
-        <View className="bg-white p-4 mx-4 mt-4 rounded-xl">
-          <View className="flex-row items-center mb-3">
+        {error ? (
+          <View className="mb-3">
+            <ErrorState pesan={error} onRetry={muatUlang} kompak />
+          </View>
+        ) : null}
+
+        {/* Kartu status + timeline */}
+        <View className="rounded-lg border border-neutral-200 bg-white p-4">
+          <View className="flex-row items-start gap-3">
             <View
-              className={`w-12 h-12 rounded-full items-center justify-center mr-3 ${statusColor.bg}`}
+              className={`items-center justify-center rounded-full ${latarNada[info.nada]}`}
+              style={{ width: 44, height: 44 }}
             >
-              <Ionicons
-                name={statusIcon}
-                size={24}
-                color={STATUS_TEXT_COLOR[statusColor.text] ?? "#DC2626"}
-              />
+              <IkonStatus size={22} color={warnaNada[info.nada]} strokeWidth={1.75} />
             </View>
             <View className="flex-1">
-              <View className={`self-start px-3 py-1 rounded-full ${statusColor.bg} mb-1`}>
-                <Text className={`text-sm font-medium ${statusColor.text}`}>
-                  {statusLabel}
-                </Text>
-              </View>
-              <Text className="text-gray-500 text-sm">
-                {formatDateTime(order.tanggal_transaksi || order.created_at)}
+              <StatusBadge
+                status={status}
+                label={expiry.expired ? teks.status.kedaluwarsa : undefined}
+                nada={expiry.expired ? "batal" : undefined}
+                className="mb-1.5"
+              />
+              <Text
+                className="font-inter text-xs text-neutral-500"
+                maxFontSizeMultiplier={1.3}
+              >
+                {tanggalWaktu(order.tanggal_transaksi || order.created_at)}
+              </Text>
+              <Text
+                className="mt-0.5 font-inter text-xs text-neutral-500"
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.3}
+              >
+                {teks.pesanan.nomorTransaksi}: {nomor}
               </Text>
             </View>
           </View>
 
-          {order.nomor_transaksi && (
-            <Text className="text-gray-400 text-xs">
-              No. Transaksi: {order.nomor_transaksi}
-            </Text>
-          )}
-
-          {/* Countdown kedaluwarsa */}
-          {status === "pending" &&
-            order.order_expires_at &&
-            (expiry.expired ? (
-              <View className="bg-red-50 border border-red-200 rounded-lg p-3 mt-3">
-                <Text className="text-red-700 text-sm font-semibold">
-                  Pesanan kedaluwarsa
+          {/* Countdown / kedaluwarsa */}
+          {status === "pending" && order.order_expires_at ? (
+            expiry.expired ? (
+              <View className="mt-3 rounded-md border border-danger-100 bg-danger-50 p-3">
+                <Text className="font-inter-semibold text-sm text-danger-700">
+                  {teks.pesanan.kedaluwarsaJudul}
                 </Text>
-                <Text className="text-red-600 text-xs mt-1">
-                  Batas pembayaran {formatDateTime(order.order_expires_at)} sudah
-                  terlewat. Pesanan akan otomatis dibatalkan oleh kasir.
+                <Text className="mt-1 font-inter text-xs text-danger-700">
+                  {teks.pesanan.kedaluwarsaDeskripsi.replace(
+                    "{waktu}",
+                    tanggalWaktu(order.order_expires_at)
+                  )}
                 </Text>
               </View>
             ) : (
-              <View className="bg-orange-50 border border-orange-200 rounded-lg p-3 mt-3">
+              <View className="mt-3 rounded-md border border-warning-500 bg-warning-50 p-3">
                 <View className="flex-row items-center justify-between">
                   <View className="flex-1">
-                    <Text className="text-orange-800 text-xs">
-                      Batas pembayaran
+                    <Text className="font-inter text-caption text-warning-700">
+                      {teks.pesanan.batasPembayaran}
                     </Text>
-                    <Text className="text-orange-900 font-bold text-lg">
+                    <Text
+                      className="font-inter-bold text-lg text-neutral-900 tabular-nums"
+                      maxFontSizeMultiplier={1.3}
+                    >
                       {expiry.countdown}
                     </Text>
                   </View>
-                  <Ionicons name="timer-outline" size={28} color="#C2410C" />
+                  <Wallet size={24} color={warnaNada.menunggu} strokeWidth={1.75} />
                 </View>
-                <Text className="text-orange-700 text-xs mt-1">
-                  s.d. {formatDateTime(order.order_expires_at)}
+                <Text className="mt-1 font-inter text-caption text-warning-700">
+                  {teks.pesanan.batasSampai.replace(
+                    "{waktu}",
+                    tanggalWaktu(order.order_expires_at)
+                  )}
                 </Text>
               </View>
-            ))}
+            )
+          ) : null}
 
-          {/* Timeline status */}
-          {timelineIndex >= 0 && (
-            <View className="mt-4">
-              {TIMELINE.map((tahap, idx) => {
-                const selesaiTahap = idx <= timelineIndex;
-                return (
-                  <View key={tahap.key} className="flex-row">
-                    <View className="items-center mr-3">
-                      <View
-                        className={`w-6 h-6 rounded-full items-center justify-center ${
-                          selesaiTahap ? "bg-primary" : "bg-gray-200"
-                        }`}
-                      >
-                        {selesaiTahap ? (
-                          <Ionicons name="checkmark" size={14} color="white" />
-                        ) : (
-                          <View className="w-2 h-2 rounded-full bg-gray-400" />
-                        )}
-                      </View>
-                      {idx < TIMELINE.length - 1 && (
-                        <View
-                          className={`w-0.5 h-8 ${
-                            idx < timelineIndex ? "bg-primary" : "bg-gray-200"
-                          }`}
-                        />
-                      )}
-                    </View>
-                    <View className="flex-1 pb-3">
-                      <Text
-                        className={`text-sm font-medium ${
-                          selesaiTahap ? "text-gray-900" : "text-gray-400"
-                        }`}
-                      >
-                        {tahap.label}
-                      </Text>
-                      <Text className="text-gray-400 text-xs">{tahap.desc}</Text>
-                    </View>
-                  </View>
-                );
-              })}
-            </View>
-          )}
+          {/* Timeline 3 tahap */}
+          <OrderTimeline indeks={timeline} className="mt-4" />
 
           {status === "dibatalkan" || status === "cancelled" ? (
-            <View className="bg-red-50 border border-red-200 rounded-lg p-3 mt-3">
-              <Text className="text-red-700 text-sm font-semibold">
-                Pesanan ditolak / dibatalkan
+            <View className="mt-1 rounded-md border border-danger-100 bg-danger-50 p-3">
+              <Text className="font-inter-semibold text-sm text-danger-700">
+                {teks.pesanan.dibatalkanJudul}
               </Text>
-              <Text className="text-red-600 text-xs mt-1">
-                Poin yang terpakai sudah dikembalikan otomatis. Silakan buat pesanan
-                baru atau hubungi kasir untuk informasi lebih lanjut.
+              <Text className="mt-1 font-inter text-xs text-danger-700">
+                {teks.pesanan.dibatalkanDeskripsi}
               </Text>
             </View>
           ) : null}
         </View>
 
-        {/* Instruksi pembayaran */}
-        {instruksi.length > 0 && status === "pending" && (
-          <View className="bg-white p-4 mx-4 mt-3 rounded-xl">
-            <View className="flex-row items-center mb-2">
-              <Ionicons name="wallet-outline" size={18} color="#1D4ED8" />
-              <Text className="font-bold text-base ml-2">Instruksi Pembayaran</Text>
+        {/* Instruksi pembayaran (hanya selama pending) */}
+        {instruksi.length > 0 && status === "pending" ? (
+          <View className="mt-3 rounded-lg border border-neutral-200 bg-white p-4">
+            <View className="mb-2 flex-row items-center gap-2">
+              <Wallet size={18} color={colors.primary600} strokeWidth={1.75} />
+              <Text
+                className="flex-1 font-inter-semibold text-base text-neutral-900"
+                maxFontSizeMultiplier={1.3}
+              >
+                {teks.pesanan.instruksiPembayaran}
+              </Text>
             </View>
-            <View className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-              {instruksi.map((line, idx) => (
-                <Text key={idx} className="text-blue-800 text-sm leading-5 mb-1">
-                  • {line}
+            <View className="rounded-md border border-primary-100 bg-primary-50 p-3">
+              {instruksi.map((baris, i) => (
+                <Text
+                  key={i}
+                  className="mb-1 font-inter text-xs text-primary-800"
+                  maxFontSizeMultiplier={1.3}
+                >
+                  • {baris}
                 </Text>
               ))}
             </View>
-            {isTransfer(metode?.jenis) && metode?.nomor_rekening && (
-              <View className="bg-gray-50 rounded-lg p-3 mt-2">
-                <Text className="text-xs text-gray-500">Nomor Rekening</Text>
-                <Text className="text-base font-bold text-gray-900">
+            {isTransfer(metode?.jenis) && metode?.nomor_rekening ? (
+              <View className="mt-2 rounded-md bg-neutral-50 p-3">
+                <Text className="font-inter text-caption text-neutral-500">
+                  {teks.pesanan.nomorRekening}
+                </Text>
+                <Text
+                  className="font-inter-bold text-base text-neutral-900 tabular-nums"
+                  selectable
+                  maxFontSizeMultiplier={1.3}
+                >
                   {metode.nomor_rekening}
                 </Text>
-                <Text className="text-xs text-gray-500 mt-1">
-                  Atas Nama: {metode.atas_nama ?? "-"}
+                <Text className="mt-1 font-inter text-caption text-neutral-500">
+                  {teks.pesanan.atasNama}: {metode.atas_nama ?? "-"}
                 </Text>
               </View>
-            )}
+            ) : null}
           </View>
-        )}
+        ) : null}
 
-        {/* Item */}
-        <View className="bg-white p-4 mx-4 mt-3 rounded-xl">
-          <Text className="font-bold text-base mb-3">Produk Dipesan</Text>
-          {order.items?.map((item, index) => (
+        {/* Produk dipesan */}
+        <View className="mt-3 rounded-lg border border-neutral-200 bg-white p-4">
+          <Text
+            className="mb-2 font-inter-semibold text-base text-neutral-900"
+            accessibilityRole="header"
+            maxFontSizeMultiplier={1.3}
+          >
+            {teks.pesanan.produkDipesan}
+          </Text>
+          {(order.items ?? []).map((item, index, arr) => (
             <View
               key={item.id}
               className={`flex-row py-3 ${
-                index < (order.items?.length || 0) - 1
-                  ? "border-b border-gray-100"
-                  : ""
+                index < arr.length - 1 ? "border-b border-neutral-100" : ""
               }`}
             >
-              <View className="w-16 h-16 bg-gray-200 rounded-lg mr-3 overflow-hidden">
+              <View
+                className="mr-3 overflow-hidden rounded-md bg-neutral-50"
+                style={{ width: 56, height: 56 }}
+              >
                 {item.gambar_url ? (
                   <Image
                     source={{ uri: item.gambar_url }}
                     style={{ width: "100%", height: "100%" }}
-                    resizeMode="cover"
+                    contentFit="cover"
+                    transition={150}
+                    accessibilityIgnoresInvertColors
                   />
                 ) : (
-                  <View className="w-full h-full items-center justify-center">
-                    <Ionicons name="image-outline" size={24} color="#9CA3AF" />
+                  <View className="h-full w-full items-center justify-center">
+                    <ImageIcon size={22} color={colors.neutral300} strokeWidth={1.75} />
                   </View>
                 )}
               </View>
 
               <View className="flex-1">
-                <Text className="font-medium text-gray-900" numberOfLines={2}>
+                <Text
+                  className="font-inter-medium text-sm text-neutral-900"
+                  numberOfLines={2}
+                  maxFontSizeMultiplier={1.3}
+                >
                   {item.nama_produk}
                 </Text>
-                {item.nama_varian && (
-                  <Text className="text-gray-500 text-sm mt-0.5">
-                    Varian: {item.nama_varian}
+                {item.nama_varian ? (
+                  <Text
+                    className="mt-0.5 font-inter text-xs text-neutral-500"
+                    numberOfLines={1}
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    {teks.keranjang.varian.replace("{nama}", item.nama_varian)}
                   </Text>
-                )}
-                <View className="flex-row justify-between items-center mt-1">
-                  <Text className="text-gray-500 text-sm">
-                    {item.jumlah}x {formatPrice(item.harga)}
+                ) : null}
+                <View className="mt-1 flex-row items-center justify-between gap-2">
+                  <Text
+                    className="font-inter text-xs text-neutral-500 tabular-nums"
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    {item.jumlah}× {rupiah(Number(item.harga) || 0)}
                   </Text>
-                  <Text className="font-semibold text-primary">
-                    {formatPrice(item.subtotal)}
+                  <Text
+                    className="font-inter-semibold text-sm text-neutral-900 tabular-nums"
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    {rupiah(Number(item.subtotal) || 0)}
                   </Text>
                 </View>
               </View>
@@ -490,139 +519,185 @@ const OrderDetailScreen = () => {
         </View>
 
         {/* Alamat */}
-        {order.alamat_pengiriman && (
-          <View className="bg-white p-4 mx-4 mt-3 rounded-xl">
-            <View className="flex-row items-center mb-2">
-              <Ionicons name="location-outline" size={18} color="#6B7280" />
-              <Text className="font-bold text-base ml-2">Alamat Pengiriman</Text>
+        {order.alamat_pengiriman ? (
+          <View className="mt-3 rounded-lg border border-neutral-200 bg-white p-4">
+            <View className="mb-2 flex-row items-center gap-2">
+              <MapPin size={18} color={colors.neutral600} strokeWidth={1.75} />
+              <Text
+                className="flex-1 font-inter-semibold text-base text-neutral-900"
+                maxFontSizeMultiplier={1.3}
+              >
+                {teks.judul.deliveryAddress}
+              </Text>
             </View>
-            <Text className="text-gray-600 leading-5">{order.alamat_pengiriman}</Text>
+            <Text
+              className="font-inter text-sm text-neutral-700"
+              maxFontSizeMultiplier={1.3}
+            >
+              {order.alamat_pengiriman}
+            </Text>
           </View>
-        )}
+        ) : null}
 
         {/* Metode pembayaran + split */}
-        <View className="bg-white p-4 mx-4 mt-3 rounded-xl">
-          <View className="flex-row items-center mb-2">
-            <Ionicons name="card-outline" size={18} color="#6B7280" />
-            <Text className="font-bold text-base ml-2">Metode Pembayaran</Text>
+        <View className="mt-3 rounded-lg border border-neutral-200 bg-white p-4">
+          <View className="mb-2 flex-row items-center gap-2">
+            <CreditCard size={18} color={colors.neutral600} strokeWidth={1.75} />
+            <Text
+              className="flex-1 font-inter-semibold text-base text-neutral-900"
+              maxFontSizeMultiplier={1.3}
+            >
+              {teks.judul.paymentMethod}
+            </Text>
           </View>
-          <Text className="text-gray-600">{metode?.nama || "Tunai"}</Text>
-          {metode?.jenis && (
-            <Text className="text-gray-400 text-sm capitalize">
+          <Text className="font-inter text-sm text-neutral-900" maxFontSizeMultiplier={1.3}>
+            {metode?.nama ?? teks.checkout.cod}
+          </Text>
+          {metode?.jenis ? (
+            <Text className="font-inter text-xs text-neutral-500" maxFontSizeMultiplier={1.3}>
               {jenisLabel(metode.jenis)}
             </Text>
-          )}
+          ) : null}
 
-          {splitInfo && (
-            <View className="bg-gray-50 rounded-lg p-3 mt-2">
-              <Text className="text-xs text-gray-500 mb-1">
-                Rincian pembayaran campuran
+          {splitInfo ? (
+            <View className="mt-2 rounded-md bg-neutral-50 p-3">
+              <Text className="font-inter text-caption text-neutral-500">
+                {teks.pesanan.rincianSplit}
               </Text>
-              <Text className="text-gray-700 text-sm">{splitInfo}</Text>
+              <Text className="mt-1 font-inter text-sm text-neutral-700">
+                {splitInfo}
+              </Text>
             </View>
-          )}
+          ) : null}
 
-          {order.status_pembayaran && (
-            <Text className="text-gray-400 text-xs mt-2">
-              Status pembayaran: {order.status_pembayaran.replace(/_/g, " ")}
+          {order.status_pembayaran ? (
+            <Text className="mt-2 font-inter text-caption text-neutral-500">
+              {teks.pesanan.statusPembayaran.replace(
+                "{status}",
+                order.status_pembayaran.replace(/_/g, " ")
+              )}
             </Text>
-          )}
+          ) : null}
         </View>
 
         {/* Catatan */}
-        {catatanBersih.length > 0 && (
-          <View className="bg-white p-4 mx-4 mt-3 rounded-xl">
-            <View className="flex-row items-center mb-2">
-              <Ionicons name="document-text-outline" size={18} color="#6B7280" />
-              <Text className="font-bold text-base ml-2">Catatan</Text>
+        {catatanBersih.length > 0 ? (
+          <View className="mt-3 rounded-lg border border-neutral-200 bg-white p-4">
+            <View className="mb-2 flex-row items-center gap-2">
+              <StickyNote size={18} color={colors.neutral600} strokeWidth={1.75} />
+              <Text
+                className="flex-1 font-inter-semibold text-base text-neutral-900"
+                maxFontSizeMultiplier={1.3}
+              >
+                {teks.checkout.catatan}
+              </Text>
             </View>
-            <Text className="text-gray-600 leading-5">{catatanBersih}</Text>
+            <Text className="font-inter text-sm text-neutral-700">{catatanBersih}</Text>
           </View>
-        )}
+        ) : null}
 
-        {/* Rincian harga */}
-        <View className="bg-white p-4 mx-4 mt-3 rounded-xl">
-          <Text className="font-bold text-base mb-3">Rincian Pembayaran</Text>
-          <View className="flex-row justify-between mb-2">
-            <Text className="text-gray-500">Subtotal Produk</Text>
-            <Text className="text-gray-700">{formatPrice(order.total_harga)}</Text>
-          </View>
-          {Number(order.total_diskon) > 0 && (
-            <View className="flex-row justify-between mb-2">
-              <Text className="text-gray-500">Diskon (promo + poin)</Text>
-              <Text className="text-green-600">
-                -{formatPrice(order.total_diskon)}
-              </Text>
-            </View>
-          )}
-          <View className="border-t border-gray-200 mt-2 pt-2">
-            <View className="flex-row justify-between">
-              <Text className="font-bold text-lg">Total Pembayaran</Text>
-              <Text className="font-bold text-lg text-primary">
-                {formatPrice(order.total_bayar)}
-              </Text>
-            </View>
-          </View>
+        {/* Ringkasan harga */}
+        <View className="mt-3">
+          <PriceSummary
+            baris={[
+              {
+                label: teks.pesanan.subtotalProduk,
+                nilai: Number(order.total_harga) || 0,
+              },
+              {
+                label: teks.pesanan.diskonTotal,
+                nilai: Number(order.total_diskon) || 0,
+                potongan: true,
+              },
+            ]}
+            total={Number(order.total_bayar) || 0}
+            totalLabel={teks.pesanan.totalPembayaran}
+          />
         </View>
 
-        {/* Aksi */}
-        <View className="mx-4 mt-4 mb-6">
-          <Pressable
+        {/* Aksi — satu CTA primary per layar */}
+        <View className="mt-4 gap-3">
+          <Button
+            title={printing ? teks.pesanan.mencetak : teks.pesanan.cetakStruk}
+            loading={printing}
+            icon={<Printer size={20} color={colors.white} strokeWidth={1.75} />}
+            fullWidth
             onPress={handlePrint}
-            disabled={printing}
-            className={`bg-primary rounded-xl py-3 items-center mb-3 ${
-              printing ? "opacity-50" : ""
-            }`}
-          >
-            <View className="flex-row items-center">
-              {printing ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Ionicons
-                  name="print-outline"
-                  size={20}
-                  color="white"
-                  style={{ marginRight: 8 }}
-                />
-              )}
-              <Text className="text-white font-semibold text-base">
-                {printing ? "Mencetak..." : "Cetak Struk"}
-              </Text>
-            </View>
-          </Pressable>
-
-          <Pressable
+          />
+          <Button
+            title={teks.pesanan.kembaliRiwayat}
+            variant="outline"
+            fullWidth
             onPress={() => router.push("/orders")}
-            className="border-2 border-gray-300 rounded-xl py-3 items-center mb-3"
-          >
-            <Text className="text-gray-700 font-semibold text-base">
-              Kembali ke Riwayat
-            </Text>
-          </Pressable>
-
-          {canCancel && (
-            <Pressable
-              onPress={handleCancelOrder}
-              disabled={cancelling}
-              className={`border-2 border-red-500 rounded-xl py-3 items-center ${
-                cancelling ? "opacity-50" : ""
-              }`}
-            >
-              {cancelling ? (
-                <ActivityIndicator size="small" color="#EF4444" />
-              ) : (
-                <Text className="text-red-500 font-semibold text-base">
-                  Batalkan Pesanan
-                </Text>
-              )}
-            </Pressable>
-          )}
+          />
+          {bisaBatal ? (
+            <Button
+              title={teks.pesanan.batalkan}
+              variant="social"
+              fullWidth
+              icon={<Ban size={20} color={colors.danger700} strokeWidth={1.75} />}
+              className="border-danger-500"
+              onPress={() => setDialogBatal("konfirmasi")}
+            />
+          ) : null}
         </View>
-
-        <View className="h-4" />
       </ScrollView>
+
+      {/* Konfirmasi batal */}
+      <Dialog
+        visible={dialogBatal !== null}
+        onClose={() => setDialogBatal(null)}
+        title={teks.pesanan.dialogBatal.judul}
+        description={teks.pesanan.dialogBatal.deskripsi}
+        actions={
+          <>
+            <Button
+              title={teks.pesanan.dialogBatal.tidak}
+              variant="outline"
+              size="md"
+              className="flex-1"
+              onPress={() => setDialogBatal(null)}
+            />
+            <Button
+              title={teks.pesanan.dialogBatal.ya}
+              size="md"
+              className="flex-1"
+              loading={cancelling}
+              onPress={handleCancel}
+            />
+          </>
+        }
+      />
+
+      {/* Hasil aksi (batal / cetak struk) */}
+      <Dialog
+        visible={pesanAksi !== null}
+        onClose={() => setPesanAksi(null)}
+        title={pesanAksi?.judul}
+        description={pesanAksi?.isi}
+        actions={
+          <>
+            <Button
+              title={teks.umum.tutup}
+              variant="outline"
+              size="md"
+              className="flex-1"
+              onPress={() => setPesanAksi(null)}
+            />
+            {pesanAksi?.aksi ? (
+              <Button
+                title={pesanAksi.aksi.label}
+                size="md"
+                className="flex-1"
+                onPress={() => {
+                  pesanAksi.aksi?.onPress();
+                  setPesanAksi(null);
+                }}
+              />
+            ) : null}
+          </>
+        }
+      />
     </SafeAreaView>
   );
-};
-
-export default OrderDetailScreen;
+}

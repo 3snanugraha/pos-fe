@@ -8,6 +8,9 @@ export { BannerTotal, BarisMetode, type BannerTotalProps, type BarisMetodeProps 
 export { CartItemRow, type CartItemRowProps } from "./CartItemRow";
 export { ErrorState, type ErrorStateProps } from "./ErrorState";
 export { NotificationItem, type NotificationItemProps, type TipeNotifikasi } from "./NotificationItem";
+export { OrderCard, ORDER_CARD_TOUCH, type OrderCardProps } from "./OrderCard";
+export { OrderTimeline, type OrderTimelineProps } from "./OrderTimeline";
+export { StatusBadge, type StatusBadgeProps } from "./StatusBadge";
 export { PriceSummary, type BarisRingkasan, type PriceSummaryProps } from "./PriceSummary";
 export { StickyBar, StickyTotal, type StickyBarProps } from "./StickyBar";
 export {
