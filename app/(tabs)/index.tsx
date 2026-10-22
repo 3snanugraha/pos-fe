@@ -1,5 +1,18 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
+import {
+  Book,
+  Car,
+  Heart,
+  Home,
+  LayoutGrid,
+  Monitor,
+  Package,
+  Shirt,
+  Shield,
+  Utensils,
+  Wine,
+} from "lucide-react-native";
 import { useEffect, useState } from "react";
 import {
   Image,
@@ -11,6 +24,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import BannerSlider from "../../components/BannerSlider";
+import { HomeHeader } from "../../src/components/layout";
+import { teks } from "../../src/lib/i18n";
+import { colors } from "../../src/theme/tokens";
 import { useCart } from "../../contexts/CartContext";
 import { apiService } from "../../services/apiService";
 import { Banner, Product, ProductCategory } from "../../services/types";
@@ -22,42 +38,29 @@ const HomeScreen = () => {
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [featuredProducts, setFeaturedProducts] = useState<Product[]>([]);
   const [customerName, setCustomerName] = useState<string>("Pelanggan");
+  const [alamat, setAlamat] = useState<string>("");
+  const [tabAktif, setTabAktif] = useState<string | number>("semua");
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const { itemCount } = useCart();
   const router = useRouter();
 
-  // Icon mapping untuk kategori
-  const getCategoryIcon = (
-    categoryName: string
-  ): keyof typeof Ionicons.glyphMap => {
-    const iconMap: { [key: string]: keyof typeof Ionicons.glyphMap } = {
-      elektronik: "laptop-outline",
-      makanan: "restaurant-outline",
-      minuman: "wine-outline",
-      pakaian: "shirt-outline",
-      fashion: "shirt-outline",
-      "alat dapur": "restaurant-outline",
-      kecantikan: "heart-outline",
-      kesehatan: "medical-outline",
-      olahraga: "fitness-outline",
-      mainan: "game-controller-outline",
-      buku: "book-outline",
-      mobil: "car-outline",
-      motor: "bicycle-outline",
-      helm: "shield-outline",
-      rumah: "home-outline",
-      default: "cube-outline",
-    };
-
-    const lowerName = categoryName.toLowerCase();
-    for (const [key, icon] of Object.entries(iconMap)) {
-      if (lowerName.includes(key)) {
-        return icon;
-      }
-    }
-    return iconMap.default;
+  // Ikon Lucide per kategori (guideline §2.5 — ikon 24 untuk tab).
+  const ikonKategori = (categoryName: string, aktif: boolean) => {
+    const nama = categoryName.toLowerCase();
+    const warna = aktif ? colors.primary600 : colors.neutral600;
+    const props = { size: 24, color: warna, strokeWidth: 1.75 } as const;
+    if (nama.includes("elektronik")) return <Monitor {...props} />;
+    if (nama.includes("makan") || nama.includes("dapur")) return <Utensils {...props} />;
+    if (nama.includes("minum")) return <Wine {...props} />;
+    if (nama.includes("pakaian") || nama.includes("fashion")) return <Shirt {...props} />;
+    if (nama.includes("kecantikan") || nama.includes("kesehatan")) return <Heart {...props} />;
+    if (nama.includes("motor") || nama.includes("mobil")) return <Car {...props} />;
+    if (nama.includes("helm")) return <Shield {...props} />;
+    if (nama.includes("rumah")) return <Home {...props} />;
+    if (nama.includes("buku")) return <Book {...props} />;
+    return <Package {...props} />;
   };
 
   const loadData = async () => {
@@ -70,6 +73,9 @@ const HomeScreen = () => {
         const userData = await getUserData();
         if (userData?.nama_pelanggan) {
           setCustomerName(userData.nama_pelanggan);
+        }
+        if (userData?.alamat) {
+          setAlamat(userData.alamat);
         }
       } catch {
         console.log("Could not get stored user data");
@@ -143,38 +149,29 @@ const HomeScreen = () => {
   }, []);
 
   return (
-    <SafeAreaView
-      className="flex-1 bg-background"
-      edges={["top", "left", "right"]}
-    >
-      <View className="bg-primary pt-4 pb-4 px-4 rounded-b-3xl">
-        <View className="flex-row justify-between items-center">
-          <View>
-            <Text className="text-white text-lg">Selamat Datang,</Text>
-            <Text className="text-white text-2xl font-bold">
-              {customerName}
-            </Text>
-          </View>
-          <View className="flex-row space-x-4">
-            <Pressable onPress={() => router.push("/notifications")}>
-              <Ionicons name="notifications-outline" size={24} color="white" />
-            </Pressable>
-            <Pressable
-              onPress={() => router.push("/(tabs)/cart")}
-              className="relative"
-            >
-              <Ionicons name="cart-outline" size={24} color="white" />
-              {itemCount > 0 && (
-                <View className="absolute -top-2 -right-2 bg-red-500 rounded-full min-w-[20px] h-5 items-center justify-center">
-                  <Text className="text-white text-xs font-bold">
-                    {itemCount > 99 ? "99+" : itemCount}
-                  </Text>
-                </View>
-              )}
-            </Pressable>
-          </View>
-        </View>
-      </View>
+    <SafeAreaView className="flex-1 bg-background" edges={["left", "right"]}>
+      <HomeHeader
+        judul={`${teks.judul.home} · ${customerName}`}
+        alamat={alamat}
+        onPressAlamat={() => router.push("/addresses")}
+        onPressWishlist={() => router.push("/wishlist")}
+        onPressCart={() => router.push("/(tabs)/cart")}
+        jumlahKeranjang={itemCount}
+        onPressSearch={() => router.push("/search")}
+        tabs={[
+          { id: "semua", label: teks.umum.semua, ikon: <LayoutGrid size={24} color={tabAktif === "semua" ? colors.primary600 : colors.neutral600} strokeWidth={1.75} /> },
+          ...categories.map((c) => ({
+            id: c.id,
+            label: c.nama_kategori,
+            ikon: ikonKategori(c.nama_kategori, tabAktif === c.id),
+          })),
+        ]}
+        tabAktif={tabAktif}
+        onTabChange={(id) => {
+          setTabAktif(id);
+          if (id !== "semua") navigateToProducts(Number(id));
+        }}
+      />
 
       <ScrollView
         className="flex-1"
@@ -214,14 +211,10 @@ const HomeScreen = () => {
                   className="w-[48%] bg-white rounded-xl p-4 mb-3 items-center"
                   onPress={() => navigateToProducts(category.id)}
                 >
-                  <View className="w-12 h-12 bg-blue-100 rounded-full items-center justify-center mb-2">
-                    <Ionicons
-                      name={getCategoryIcon(category.nama_kategori)}
-                      size={24}
-                      color="#1E40AF"
-                    />
+                  <View className="w-12 h-12 bg-primary-100 rounded-full items-center justify-center mb-2">
+                    {ikonKategori(category.nama_kategori, true)}
                   </View>
-                  <Text className="font-medium text-center" numberOfLines={2}>
+                  <Text className="font-inter-medium text-center text-sm text-neutral-900" numberOfLines={2}>
                     {category.nama_kategori}
                   </Text>
                 </Pressable>
