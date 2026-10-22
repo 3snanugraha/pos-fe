@@ -24,6 +24,14 @@ const ProfileScreen = () => {
         router.push('/orders');
       }
     },
+    {
+      title: 'Poin Saya',
+      icon: 'ribbon-outline',
+      description: 'Saldo & riwayat penggunaan poin',
+      action: () => {
+        router.push('/points');
+      }
+    },
     { 
       title: 'Wishlist', 
       icon: 'heart-outline',
@@ -48,13 +56,20 @@ const ProfileScreen = () => {
         router.push('/payment-methods');
       }
     },
+    {
+      title: 'Order Masuk (Kasir)',
+      icon: 'shield-checkmark-outline',
+      description: 'Verifikasi / tolak pesanan online',
+      action: () => {
+        router.push('/kasir/orders');
+      }
+    },
     { 
       title: 'Pengaturan', 
       icon: 'settings-outline',
       description: 'Pengaturan aplikasi dan akun',
       action: () => {
-        // Navigate to settings
-        // console.log('Navigate to settings');
+        router.push('/profile/edit');
       }
     },
     { 
@@ -62,8 +77,10 @@ const ProfileScreen = () => {
       icon: 'help-circle-outline',
       description: 'Pusat bantuan dan dukungan',
       action: () => {
-        // Navigate to help
-        // console.log('Navigate to help');
+        Alert.alert(
+          'Bantuan',
+          'Hubungi kasir/toko melalui telepon atau kunjungi toko langsung untuk bantuan pesanan.'
+        );
       }
     },
   ];
