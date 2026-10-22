@@ -6,7 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StickyBar } from "../../src/components/commerce";
 import { AppBar } from "../../src/components/layout";
 import { Button } from "../../src/components/ui";
-import { rupiah } from "../../src/lib/format";
+import { angka, rupiah } from "../../src/lib/format";
 import { teks } from "../../src/lib/i18n";
 import { colors, sizes } from "../../src/theme/tokens";
 import { apiService } from "../../services/apiService";
@@ -148,7 +148,7 @@ export default function CheckoutSuccessScreen() {
                   {teks.sukses.poinDigunakan}
                 </Text>
                 <Text className="font-inter-semibold text-sm text-success-700 tabular-nums">
-                  {poinDipakai.toLocaleString("id-ID")} poin
+                  {angka(poinDipakai)} poin
                 </Text>
               </View>
             ) : null}

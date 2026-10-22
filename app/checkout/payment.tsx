@@ -13,7 +13,7 @@ import {
 } from "../../src/components/commerce";
 import { AppBar } from "../../src/components/layout";
 import { Accordion, Button, Toggle, type AccordionItem } from "../../src/components/ui";
-import { rupiah } from "../../src/lib/format";
+import { angka, rupiah } from "../../src/lib/format";
 import { teks } from "../../src/lib/i18n";
 import { useCheckout } from "../../src/screens/checkout/CheckoutContext";
 import { colors, sizes } from "../../src/theme/tokens";
@@ -422,12 +422,12 @@ export default function PaymentScreen() {
                 >
                   {teks.checkout.poinKeterangan
                     .replace("{nilai}", rupiah(1))
-                    .replace("{maks}", maksPoin.toLocaleString("id-ID"))}
+                    .replace("{maks}", angka(maksPoin))}
                 </Text>
                 <Text className="mt-1 font-inter text-caption text-neutral-400">
                   {teks.checkout.saldoPoin.replace(
                     "{jumlah}",
-                    poinValue.maxSaldo.toLocaleString("id-ID")
+                    angka(poinValue.maxSaldo)
                   )}
                 </Text>
               </View>
@@ -474,7 +474,7 @@ export default function PaymentScreen() {
                 {poinValue.dipakai > 0 ? (
                   <Text className="mt-2 font-inter text-xs text-success-700 tabular-nums">
                     {teks.checkout.poinDipakai
-                      .replace("{jumlah}", poinValue.dipakai.toLocaleString("id-ID"))
+                      .replace("{jumlah}", angka(poinValue.dipakai))
                       .replace("{nilai}", rupiah(poinValue.rupiah))}
                   </Text>
                 ) : null}
