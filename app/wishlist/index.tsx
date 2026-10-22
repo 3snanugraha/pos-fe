@@ -1,22 +1,26 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Heart } from "lucide-react-native";
 import { useRouter } from "expo-router";
-import { useEffect, useState } from "react";
-import {
-  Alert,
-  Image,
-  Pressable,
-  RefreshControl,
-  ScrollView,
-  Text,
-  View,
-} from "react-native";
+import { useCallback, useEffect, useState } from "react";
+import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Navbar from "../../components/Navbar";
+import {
+  ErrorState,
+  ProductCardHorizontal,
+  Skeleton,
+} from "../../src/components/commerce";
+import { AppBar } from "../../src/components/layout";
+import { EmptyState } from "../../src/components/ui";
+import { teks } from "../../src/lib/i18n";
+import type { ProdukApi } from "../../src/lib/produk";
+import { colors } from "../../src/theme/tokens";
 import { useCart } from "../../contexts/CartContext";
 import { apiService } from "../../services/apiService";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 
-// Temporary interface matching backend response
+/**
+ * Baris wishlist dari backend. `id` adalah id PRODUK (dipakai untuk membuka
+ * detail & menambah ke keranjang), `harga_jual` berupa string desimal.
+ */
 interface BackendWishlistItem {
   id: number;
   nama_produk: string;
@@ -28,6 +32,30 @@ interface BackendWishlistItem {
   created_at?: string;
 }
 
+/** Normalisasi baris backend → bentuk yang dipakai `ProductCardHorizontal`. */
+function keProduk(row: BackendWishlistItem): ProdukApi {
+  return {
+    id: row.id,
+    nama_produk: row.nama_produk || "Produk",
+    gambar_url: row.gambar || null,
+    harga: row.harga_jual,
+    is_flash_sale: !!row.flash_sale,
+    harga_flash_sale: row.harga_flash_sale ?? null,
+    kategori_nama: row.kategori ?? null,
+  };
+}
+
+/**
+ * Barang Disimpan Zovora — guideline §3.9 (kartu horizontal) + §5 (empty state).
+ *
+ * Kartu: thumbnail 72×80, judul Body medium maks 2 baris, rating, harga +
+ * harga coret + badge diskon, heart terisi danger-500 (target 44). Empty state
+ * memakai copy "Belum Ada Barang Disimpan!".
+ *
+ * Logika wishlist tidak berubah: endpoint `getWishlist`/`removeFromWishlist`,
+ * serta tambah-ke-keranjang lewat varian pertama (supaya id baris keranjang
+ * konsisten dengan halaman detail produk).
+ */
 const WishlistScreen = () => {
   const router = useRouter();
   const { addItem } = useCart();
@@ -36,78 +64,75 @@ const WishlistScreen = () => {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(price);
-  };
-
-  const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("id-ID", {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
-  };
-
-  const loadWishlist = async () => {
-    setLoading(true);
-    setError(null);
-
+  const ambilWishlist = useCallback(async () => {
     try {
       const result = (await apiService.getWishlist({ per_page: 50 })) as any;
 
-      // API returns array directly from backend response.data
+      // API mengembalikan array langsung dari backend `response.data`.
       if (Array.isArray(result)) {
-        setWishlistItems(result);
-      } else if (result && result.data && Array.isArray(result.data)) {
-        // Fallback for wrapped format
-        setWishlistItems(result.data);
-      } else {
-        console.warn("Unexpected wishlist data format:", result);
-        setWishlistItems([]);
+        return { baris: result as BackendWishlistItem[], galat: null };
       }
-    } catch (error: any) {
-      console.error("Error loading wishlist:", error);
-      const isAuthError = await handleAuthError(error);
-      if (!isAuthError) {
-        setError(getErrorMessage(error));
+      if (result && Array.isArray(result.data)) {
+        return { baris: result.data as BackendWishlistItem[], galat: null };
       }
-    } finally {
-      setLoading(false);
+      return { baris: [] as BackendWishlistItem[], galat: null };
+    } catch (err: any) {
+      console.error("Error loading wishlist:", err);
+      const isAuthError = await handleAuthError(err);
+      return {
+        baris: [] as BackendWishlistItem[],
+        galat: isAuthError ? null : getErrorMessage(err),
+      };
     }
-  };
+  }, []);
+
+  useEffect(() => {
+    let aktif = true;
+    (async () => {
+      const hasil = await ambilWishlist();
+      if (!aktif) return;
+      setWishlistItems(hasil.baris);
+      setError(hasil.galat);
+      setLoading(false);
+    })();
+    return () => {
+      aktif = false;
+    };
+  }, [ambilWishlist]);
 
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadWishlist();
+    const hasil = await ambilWishlist();
+    setWishlistItems(hasil.baris);
+    setError(hasil.galat);
     setRefreshing(false);
   };
 
-  const handleRemoveFromWishlist = async (item: BackendWishlistItem) => {
+  const muatUlang = async () => {
+    setLoading(true);
+    const hasil = await ambilWishlist();
+    setWishlistItems(hasil.baris);
+    setError(hasil.galat);
+    setLoading(false);
+  };
+
+  const hapus = async (item: BackendWishlistItem) => {
+    try {
+      await apiService.removeFromWishlist(item.id);
+      setWishlistItems((prev) => prev.filter((row) => row.id !== item.id));
+    } catch (err: any) {
+      console.error("Error removing from wishlist:", err);
+      Alert.alert("Error", "Gagal menghapus produk dari wishlist");
+    }
+  };
+
+  const konfirmasiHapus = (item: BackendWishlistItem) => {
     Alert.alert(
-      "Hapus dari Wishlist",
-      `Apakah Anda yakin ingin menghapus ${item.nama_produk || "produk ini"} dari wishlist?`,
+      "Hapus dari Simpanan",
+      `Hapus ${item.nama_produk || "produk ini"} dari barang tersimpan?`,
       [
-        { text: "Batal", style: "cancel" },
-        {
-          text: "Hapus",
-          style: "destructive",
-          onPress: async () => {
-            try {
-              await apiService.removeFromWishlist(item.id);
-              setWishlistItems((prev) =>
-                prev.filter((wishItem) => wishItem.id !== item.id)
-              );
-              Alert.alert("Berhasil!", "Produk berhasil dihapus dari wishlist");
-            } catch (error: any) {
-              console.error("Error removing from wishlist:", error);
-              Alert.alert("Error", "Gagal menghapus produk dari wishlist");
-            }
-          },
-        },
+        { text: teks.umum.batal, style: "cancel" },
+        { text: teks.umum.hapus, style: "destructive", onPress: () => hapus(item) },
       ]
     );
   };
@@ -119,7 +144,6 @@ const WishlistScreen = () => {
        * Tanpa varian, id baris keranjang jadi `produkId` (bukan
        * `produkId+varianId`) sehingga muncul sebagai item duplikat dari
        * baris yang sama saat ditambahkan dari halaman detail produk.
-       * `harga` backend berupa string desimal, jadi dinormalisasi ke number.
        */
       const product = await apiService.getProduct(item.id);
       const varian = product.varian?.[0];
@@ -146,14 +170,11 @@ const WishlistScreen = () => {
         `${item.nama_produk || "Produk"} ditambahkan ke keranjang`,
         [
           { text: "Lanjut Belanja", style: "cancel" },
-          {
-            text: "Lihat Keranjang",
-            onPress: () => router.push("/(tabs)/cart"),
-          },
+          { text: "Lihat Keranjang", onPress: () => router.push("/(tabs)/cart") },
         ]
       );
-    } catch (error: any) {
-      console.error("Error adding to cart:", error);
+    } catch (err: any) {
+      console.error("Error adding to cart:", err);
       Alert.alert("Error", "Gagal menambahkan produk ke keranjang");
     }
   };
@@ -162,169 +183,72 @@ const WishlistScreen = () => {
     router.push(`/product/${item.id}`);
   };
 
-  useEffect(() => {
-    loadWishlist();
-  }, []);
-
-  if (error) {
-    return (
-      <SafeAreaView
-        className="flex-1 bg-background"
-        edges={["top", "left", "right"]}
-      >
-        <Navbar title="Wishlist" showBackButton={true} />
-        <View className="flex-1 justify-center items-center px-4">
-          <View className="bg-red-50 border border-red-200 rounded-xl p-4 w-full">
-            <Text className="text-red-700 text-center">{error}</Text>
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (loading) {
-    return (
-      <SafeAreaView
-        className="flex-1 bg-background"
-        edges={["top", "left", "right"]}
-      >
-        <Navbar title="Wishlist" showBackButton={true} />
-        <View className="flex-1 justify-center items-center">
-          <Text className="text-gray-500">Memuat wishlist...</Text>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  if (!wishlistItems || wishlistItems.length === 0) {
-    return (
-      <SafeAreaView
-        className="flex-1 bg-background"
-        edges={["top", "left", "right"]}
-      >
-        <Navbar title="Wishlist" showBackButton={true} />
-        <View className="flex-1 justify-center items-center px-4">
-          <Ionicons name="heart-outline" size={80} color="#9CA3AF" />
-          <Text className="text-xl font-semibold text-gray-600 mt-4 mb-2">
-            Wishlist Kosong
-          </Text>
-          <Text className="text-gray-500 text-center mb-6">
-            Belum ada produk yang ditambahkan ke wishlist
-          </Text>
-          <Pressable
-            onPress={() => router.push("/(tabs)/products")}
-            className="bg-primary px-6 py-3 rounded-xl"
-          >
-            <Text className="text-white font-semibold">Mulai Belanja</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const judul =
+    wishlistItems.length > 0
+      ? `${teks.judul.saved} (${wishlistItems.length})`
+      : teks.judul.saved;
 
   return (
-    <SafeAreaView
-      className="flex-1 bg-background"
-      edges={["top", "left", "right"]}
-    >
-      <Navbar
-        title={`Wishlist (${wishlistItems?.length || 0})`}
-        showBackButton={true}
-      />
+    <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
+      <AppBar title={judul} onBack={() => router.back()} />
 
-      <ScrollView
-        className="flex-1"
-        refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
-        }
-      >
-        <View className="p-4">
-          <View className="grid grid-cols-2 gap-3">
-            {(wishlistItems || []).map((item) => (
-              <View
-                key={item.id}
-                className="bg-white rounded-xl p-3 w-[48%] mb-4 shadow-sm"
-              >
-                <Pressable onPress={() => handleProductPress(item)}>
-                  {/* Product Image */}
-                  <View className="bg-gray-200 h-32 rounded-lg mb-2 overflow-hidden relative">
-                    <Image
-                      source={{
-                        uri:
-                          item.gambar ||
-                          "https://via.placeholder.com/300x200/E5E7EB/9CA3AF?text=No+Image",
-                      }}
-                      style={{ width: "100%", height: "100%" }}
-                      resizeMode="cover"
-                    />
-                    <Pressable
-                      onPress={() => handleRemoveFromWishlist(item)}
-                      className="absolute top-2 right-2 w-8 h-8 bg-white/80 rounded-full items-center justify-center"
-                    >
-                      <Ionicons name="heart" size={20} color="#EF4444" />
-                    </Pressable>
-                  </View>
-
-                  {/* Product Info */}
-                  <Text className="font-medium mb-1" numberOfLines={2}>
-                    {item.nama_produk || "Nama Produk"}
+      {loading ? (
+        <View className="px-4 pt-2">
+          {[0, 1, 2, 3].map((i) => (
+            <View key={i} className="flex-row gap-3 py-4">
+              <Skeleton width={72} height={80} radiusClassName="rounded-md" />
+              <View className="flex-1">
+                <Skeleton height={14} width="85%" />
+                <Skeleton height={12} width="40%" className="mt-2" />
+                <Skeleton height={16} width="50%" className="mt-2" />
+              </View>
+            </View>
+          ))}
+        </View>
+      ) : error ? (
+        <ErrorState pesan={error} onRetry={muatUlang} />
+      ) : wishlistItems.length === 0 ? (
+        <EmptyState
+          icon={<Heart size={36} color={colors.primary600} strokeWidth={1.75} />}
+          title={teks.empty.wishlist.judul}
+          description={teks.empty.wishlist.deskripsi}
+        />
+      ) : (
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingBottom: 16 }}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[colors.primary600]}
+              tintColor={colors.primary600}
+            />
+          }
+        >
+          <View className="divide-y divide-neutral-100 px-4">
+            {wishlistItems.map((item) => (
+              <View key={item.id}>
+                <ProductCardHorizontal
+                  produk={keProduk(item)}
+                  onPress={() => handleProductPress(item)}
+                  onHapusSimpan={() => konfirmasiHapus(item)}
+                />
+                <Pressable
+                  onPress={() => handleAddToCart(item)}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${teks.tombol.tambahKeKeranjang} ${item.nama_produk}`}
+                  className="-mt-1 min-h-[44px] justify-center pb-3"
+                >
+                  <Text className="font-inter-medium text-xs text-primary-700">
+                    + {teks.tombol.tambahKeKeranjang}
                   </Text>
-
-                  <Text className="text-lg font-bold text-primary mb-2">
-                    {formatPrice(parseFloat(item.harga_jual) || 0)}
-                  </Text>
-
-                  {item.created_at && (
-                    <Text className="text-xs text-gray-500 mb-3">
-                      Ditambahkan {formatDate(item.created_at)}
-                    </Text>
-                  )}
                 </Pressable>
-
-                {/* Action Buttons */}
-                <View className="flex-row space-x-2">
-                  <Pressable
-                    onPress={() => handleRemoveFromWishlist(item)}
-                    className="flex-1 bg-gray-100 py-2 rounded-lg items-center"
-                  >
-                    <Text className="text-gray-700 text-sm font-medium">
-                      Hapus
-                    </Text>
-                  </Pressable>
-
-                  <Pressable
-                    onPress={() => handleAddToCart(item)}
-                    className="flex-1 bg-primary py-2 rounded-lg items-center"
-                  >
-                    <Text className="text-white text-sm font-medium">
-                      + Keranjang
-                    </Text>
-                  </Pressable>
-                </View>
               </View>
             ))}
           </View>
-        </View>
-      </ScrollView>
-
-      {/* Bottom Action Bar */}
-      <View className="bg-white border-t border-gray-200 p-4">
-        <View className="flex-row space-x-3">
-          <Pressable
-            onPress={() => router.push("/(tabs)/products")}
-            className="flex-1 bg-gray-100 py-3 rounded-xl items-center"
-          >
-            <Text className="text-gray-700 font-semibold">Lanjut Belanja</Text>
-          </Pressable>
-
-          <Pressable
-            onPress={() => router.push("/(tabs)/cart")}
-            className="flex-1 bg-primary py-3 rounded-xl items-center"
-          >
-            <Text className="text-white font-semibold">Lihat Keranjang</Text>
-          </Pressable>
-        </View>
-      </View>
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 };
