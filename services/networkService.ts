@@ -8,7 +8,7 @@ export class NetworkService {
   private static instance: NetworkService;
   private isConnected: boolean = true;
   private listeners: Array<(state: NetworkState) => void> = [];
-  private pingInterval: NodeJS.Timeout | null = null;
+  private pingInterval: ReturnType<typeof setInterval> | null = null;
   private lastConnectivityCheck: number = 0;
   private connectivityCheckInterval: number = 30000; // 30 seconds
 

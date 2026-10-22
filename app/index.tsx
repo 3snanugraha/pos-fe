@@ -4,15 +4,13 @@ import { Image } from 'expo-image';
 import { Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { isAuthenticated, verifyToken } from '../services/auth';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { fetchBanners, fetchPaymentMethods } from '../services/api';
 
 export default function LoadingScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuth, setIsAuth] = useState(false);
   const [loadingText, setLoadingText] = useState('Memuat aplikasi...');
-  const fadeAnim = new Animated.Value(0);
-  const scaleAnim = new Animated.Value(0.8);
+  const [fadeAnim] = useState(() => new Animated.Value(0));
+  const [scaleAnim] = useState(() => new Animated.Value(0.8));
 
   useEffect(() => {
     // Start animations
@@ -29,38 +27,45 @@ export default function LoadingScreen() {
         useNativeDriver: true,
       }),
     ]).start();
+  }, [fadeAnim, scaleAnim]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const initializeApp = async () => {
+      try {
+        // Check if token exists first
+        setLoadingText('Memeriksa autentikasi...');
+        await new Promise(resolve => setTimeout(resolve, 500));
+        const hasToken = await isAuthenticated();
+
+        if (hasToken) {
+          // If token exists, verify it's still valid
+          setLoadingText('Memverifikasi sesi...');
+          await new Promise(resolve => setTimeout(resolve, 500));
+          const isValidToken = await verifyToken();
+          if (mounted) setIsAuth(isValidToken);
+        } else if (mounted) {
+          setIsAuth(false);
+        }
+
+        if (mounted) setLoadingText('Siap!');
+        await new Promise(resolve => setTimeout(resolve, 500));
+      } catch (error) {
+        console.error('Initialization error:', error);
+        // If there's any error during auth check, assume not authenticated
+        if (mounted) setIsAuth(false);
+      } finally {
+        if (mounted) setIsLoading(false);
+      }
+    };
 
     initializeApp();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
+    return () => {
+      mounted = false;
+    };
   }, []);
-
-  const initializeApp = async () => {
-    try {
-      // Check if token exists first
-      setLoadingText('Memeriksa autentikasi...');
-      await new Promise(resolve => setTimeout(resolve, 500));
-      const hasToken = await isAuthenticated();
-      
-      if (hasToken) {
-        // If token exists, verify it's still valid
-        setLoadingText('Memverifikasi sesi...');
-        await new Promise(resolve => setTimeout(resolve, 500));
-        const isValidToken = await verifyToken();
-        setIsAuth(isValidToken);
-      } else {
-        setIsAuth(false);
-      }
-
-      setLoadingText('Siap!');
-      await new Promise(resolve => setTimeout(resolve, 500));
-    } catch (error) {
-      console.error('Initialization error:', error);
-      // If there's any error during auth check, assume not authenticated
-      setIsAuth(false);
-    } finally {
-      setIsLoading(false);
-    }
-  };
 
   if (!isLoading) {
     return <Redirect href={isAuth ? "/(tabs)" : "/auth/login"} />;

@@ -56,7 +56,7 @@ const ProductsScreen = () => {
     setSelectedCategory(categoryId);
     
     try {
-      const productsResult = await fetchProducts({ 
+      const productsResult = await apiService.searchProducts({ 
         kategori_id: categoryId || undefined,
         per_page: 20 
       });

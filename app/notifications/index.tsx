@@ -67,7 +67,16 @@ const NotificationsScreen = () => {
 
     try {
       const result = await apiService.getNotifications({ per_page: 50 });
-      setNotifications(result.data);
+      // Backend mengirim flag `dibaca`; app memakai `is_read`.
+      const rows = (result.data ?? []).map((n: any) => ({
+        ...n,
+        is_read: n.is_read ?? n.dibaca ?? false,
+        tipe: n.tipe ?? n.jenis_notifikasi ?? 'system',
+        judul: n.judul ?? n.judul_tampil ?? 'Notifikasi',
+        pesan: n.pesan ?? n.isi_notifikasi ?? '',
+        tanggal_kirim: n.tanggal_kirim ?? n.created_at,
+      }));
+      setNotifications(rows);
     } catch (error: any) {
       console.error('Error loading notifications:', error);
       const isAuthError = await handleAuthError(error);

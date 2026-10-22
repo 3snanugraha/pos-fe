@@ -1,7 +1,7 @@
 import { Link } from "expo-router";
 import React, { useEffect, useRef, useState } from "react";
 import { Dimensions, Image, Pressable, Text, View } from "react-native";
-import { Banner } from "../services/api";
+import { Banner } from "../services/types";
 
 const { width } = Dimensions.get("window");
 

@@ -45,12 +45,12 @@ const SearchScreen = () => {
     { key: "stok", label: "Stok Terbanyak", direction: "desc" },
   ];
 
-  const formatPrice = (price: number) => {
+  const formatPrice = (price?: number | null) => {
     return new Intl.NumberFormat("id-ID", {
       style: "currency",
       currency: "IDR",
       minimumFractionDigits: 0,
-    }).format(price);
+    }).format(price ?? 0);
   };
 
   const loadCategories = React.useCallback(async () => {
@@ -62,14 +62,21 @@ const SearchScreen = () => {
     }
   }, []);
 
+  const addToSearchHistory = (query: string) => {
+    if (!query) return;
+
+    setSearchHistory((prev) => {
+      const filtered = prev.filter((item) => item !== query);
+      return [query, ...filtered].slice(0, 10); // Keep only last 10 searches
+    });
+  };
+
   const searchProducts = React.useCallback(
     async (query: string = searchQuery) => {
       setLoading(true);
       setError(null);
 
       try {
-        }
-
         const params: any = {
           per_page: 50,
           sort_by: sortBy,
@@ -85,12 +92,12 @@ const SearchScreen = () => {
           params.kategori_id = selectedCategory;
         }
 
-        // Add price range filter (this would need backend support)
+        // Rentang harga: backend memakai harga_min/harga_max
         if (priceRange.min) {
-          params.min_price = parseInt(priceRange.min);
+          params.min_harga = parseInt(priceRange.min, 10);
         }
         if (priceRange.max) {
-          params.max_price = parseInt(priceRange.max);
+          params.max_harga = parseInt(priceRange.max, 10);
         }
 
         const result = await apiService.searchProducts(params);
@@ -107,15 +114,6 @@ const SearchScreen = () => {
     },
     [searchQuery, sortBy, sortDirection, selectedCategory, priceRange]
   );
-
-  const addToSearchHistory = (query: string) => {
-    if (!query) return;
-
-    setSearchHistory((prev) => {
-      const filtered = prev.filter((item) => item !== query);
-      return [query, ...filtered].slice(0, 10); // Keep only last 10 searches
-    });
-  };
 
   const handleSearch = () => {
     searchProducts(searchQuery);
@@ -369,7 +367,7 @@ const SearchScreen = () => {
               Produk Tidak Ditemukan
             </Text>
             <Text className="text-gray-500 text-center mb-6">
-              Tidak ada produk yang cocok dengan pencarian "{searchQuery}"
+              Tidak ada produk yang cocok dengan pencarian {`"${searchQuery}"`}
             </Text>
             <Pressable
               onPress={() => {
@@ -422,7 +420,7 @@ const SearchScreen = () => {
               searchQuery && products.length > 0 ? (
                 <View className="mb-4">
                   <Text className="text-gray-700">
-                    Ditemukan {products.length} produk untuk "{searchQuery}"
+                    Ditemukan {products.length} produk untuk {`"${searchQuery}"`}
                   </Text>
                 </View>
               ) : null

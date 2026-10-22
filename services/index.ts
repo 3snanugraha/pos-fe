@@ -105,7 +105,7 @@ export const getServiceStatus = async () => {
   } catch (error) {
     console.error('Failed to get service status:', error);
     return {
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       timestamp: Date.now(),
     };
   }
@@ -306,7 +306,7 @@ export const healthCheck = async () => {
     console.error('❌ Health check failed:', error);
     return {
       healthy: false,
-      error: error.message,
+      error: error instanceof Error ? error.message : String(error),
       duration: Date.now() - startTime,
       timestamp: startTime,
     };
