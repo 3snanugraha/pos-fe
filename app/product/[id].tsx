@@ -204,7 +204,7 @@ export default function ProductDetailScreen() {
     setMemproses(true);
     const berhasil = await tambahKeKeranjang();
     setMemproses(false);
-    if (berhasil) router.push("/checkout");
+    if (berhasil) router.push("/checkout/summary");
   };
 
   const onTambahWishlist = async () => {
