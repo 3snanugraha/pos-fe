@@ -1,6 +1,6 @@
 import { MapPin, Pencil, Plus, Star, Trash2 } from "lucide-react-native";
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ErrorState, Skeleton, StickyBar } from "../../src/components/commerce";
@@ -54,19 +54,29 @@ export default function AddressListScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    let aktif = true;
-    (async () => {
-      const hasil = await ambilAlamat();
-      if (!aktif) return;
-      setAddresses(hasil.baris);
-      setError(hasil.galat);
-      setLoading(false);
-    })();
-    return () => {
-      aktif = false;
-    };
-  }, [ambilAlamat]);
+  /**
+   * Muat ulang daftar setiap layar difokuskan kembali.
+   *
+   * Sebelumnya hanya `useEffect` saat mount: setelah "Ubah" alamat, layar form
+   * memanggil `router.back()` dan daftar tetap menampilkan data lama (cache
+   * AsyncStorage masih menyimpan versi sebelum perubahan) sampai aplikasi
+   * di-reload. `useFocusEffect` memastikan data diambil ulang saat kembali.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      let aktif = true;
+      (async () => {
+        const hasil = await ambilAlamat();
+        if (!aktif) return;
+        setAddresses(hasil.baris);
+        setError(hasil.galat);
+        setLoading(false);
+      })();
+      return () => {
+        aktif = false;
+      };
+    }, [ambilAlamat])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);

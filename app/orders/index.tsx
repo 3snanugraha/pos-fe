@@ -1,6 +1,6 @@
 import { Receipt } from "lucide-react-native";
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ErrorState, OrderCard, Skeleton } from "../../src/components/commerce";
@@ -61,22 +61,30 @@ export default function OrderHistoryScreen() {
     }
   }, []);
 
-  // Muat ulang tiap filter berubah; state hanya diubah di callback async.
-  // `setLoading(true)` dipanggil dari handler filter (bukan di body effect)
-  // agar tidak memicu render berantai — pola yang sama dipakai layar W3/W4.
-  useEffect(() => {
-    let aktif = true;
-    (async () => {
-      const hasil = await loadOrders(filter);
-      if (!aktif) return;
-      setOrders(hasil.baris);
-      setError(hasil.galat);
-      setLoading(false);
-    })();
-    return () => {
-      aktif = false;
-    };
-  }, [filter, loadOrders]);
+  /**
+   * Muat ulang tiap filter berubah DAN setiap layar difokuskan kembali.
+   *
+   * `useFocusEffect` diperlukan karena detail pesanan bisa mengubah status
+   * (batalkan / verifikasi kasir) lalu memanggil `router.back()`; tanpa muat
+   * ulang saat fokus, daftar menampilkan status lama sampai app di-reload.
+   * State hanya diubah di callback async (bukan body effect) agar tidak
+   * memicu render berantai — pola yang sama dipakai layar W3/W4.
+   */
+  useFocusEffect(
+    useCallback(() => {
+      let aktif = true;
+      (async () => {
+        const hasil = await loadOrders(filter);
+        if (!aktif) return;
+        setOrders(hasil.baris);
+        setError(hasil.galat);
+        setLoading(false);
+      })();
+      return () => {
+        aktif = false;
+      };
+    }, [filter, loadOrders])
+  );
 
   const gantiFilter = (kunci: FilterKunci) => {
     if (kunci === filter) return;

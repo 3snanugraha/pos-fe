@@ -627,7 +627,18 @@ export default function OrderDetailScreen() {
             title={teks.pesanan.kembaliRiwayat}
             variant="outline"
             fullWidth
-            onPress={() => router.push("/orders")}
+            onPress={() => {
+              /**
+               * Harus kembali ke layar riwayat yang sudah ada, bukan `push`
+               * route baru: push membuat instance /orders kedua dengan filter
+               * default "Semua", sehingga filter pengguna hilang dan tumpukan
+               * navigasi terus bertambah setiap kali kembali dari detail.
+               * Bila detail dibuka langsung (mis. dari notifikasi/URL),
+               * `canGoBack` false → ganti layar alih-alih menumpuk.
+               */
+              if (router.canGoBack()) router.back();
+              else router.replace("/orders");
+            }}
           />
           {bisaBatal ? (
             <Button

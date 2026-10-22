@@ -12,8 +12,8 @@ import {
   ShieldCheck,
   User,
 } from "lucide-react-native";
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { ErrorState, Skeleton } from "../src/components/commerce";
@@ -75,19 +75,21 @@ export default function ProfileScreen() {
     }
   }, []);
 
-  useEffect(() => {
-    let aktif = true;
-    (async () => {
-      const hasil = await ambilProfil();
-      if (!aktif) return;
-      setCustomer(hasil.profil);
-      setError(hasil.galat);
-      setLoading(false);
-    })();
-    return () => {
-      aktif = false;
-    };
-  }, [ambilProfil]);
+  useFocusEffect(
+    useCallback(() => {
+      let aktif = true;
+      (async () => {
+        const hasil = await ambilProfil();
+        if (!aktif) return;
+        setCustomer(hasil.profil);
+        setError(hasil.galat);
+        setLoading(false);
+      })();
+      return () => {
+        aktif = false;
+      };
+    }, [ambilProfil])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);

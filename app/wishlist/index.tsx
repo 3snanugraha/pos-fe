@@ -1,6 +1,6 @@
 import { Heart } from "lucide-react-native";
-import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -89,19 +89,23 @@ const WishlistScreen = () => {
     }
   }, []);
 
-  useEffect(() => {
-    let aktif = true;
-    (async () => {
-      const hasil = await ambilWishlist();
-      if (!aktif) return;
-      setWishlistItems(hasil.baris);
-      setError(hasil.galat);
-      setLoading(false);
-    })();
-    return () => {
-      aktif = false;
-    };
-  }, [ambilWishlist]);
+  // Muat ulang setiap layar difokuskan kembali: wishlist bisa berubah dari
+  // layar lain (detail produk menambah, kartu simpanan menghapus).
+  useFocusEffect(
+    useCallback(() => {
+      let aktif = true;
+      (async () => {
+        const hasil = await ambilWishlist();
+        if (!aktif) return;
+        setWishlistItems(hasil.baris);
+        setError(hasil.galat);
+        setLoading(false);
+      })();
+      return () => {
+        aktif = false;
+      };
+    }, [ambilWishlist])
+  );
 
   const onRefresh = async () => {
     setRefreshing(true);
