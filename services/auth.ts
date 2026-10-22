@@ -1,4 +1,5 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { cacheManager } from "./cacheManager";
 import { API_CONFIG } from "./config";
 
 // Demo mode for development when server is not available
@@ -122,6 +123,13 @@ export const logout = async (): Promise<void> => {
     console.error("Logout error:", error);
   } finally {
     await AsyncStorage.multiRemove(["auth_token", "user_data"]);
+    /**
+     * Cache AsyncStorage (`cache_customer_profile`, dll.) HARUS ikut dibersihkan.
+     * Tanpa ini, setelah keluar lalu masuk dengan akun lain, layar Akun masih
+     * menampilkan nama/poin pelanggan sebelumnya sampai cache kedaluwarsa
+     * (profil customer di-cache 30 menit) — data pengguna bocor antar sesi.
+     */
+    await cacheManager.clear();
   }
 };
 
