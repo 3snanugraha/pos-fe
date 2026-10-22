@@ -1,6 +1,6 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useLocalSearchParams, useRouter } from "expo-router";
-import React, { useEffect, useState } from "react";
+import { ArrowUpLeft, ImageIcon, Search, SlidersHorizontal, TrendingUp, Trash2 } from "lucide-react-native";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import {
   FlatList,
   Image,
@@ -11,9 +11,19 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Navbar from "../../components/Navbar";
+import { AppBar } from "../../src/components/layout";
+import {
+  EmptyState,
+  Chip,
+} from "../../src/components/ui";
+import { ProductCardGrid } from "../../src/components/commerce";
+import { SearchBar } from "../../src/components/commerce/SearchBar";
+import { SkeletonGridProduk } from "../../src/components/commerce/Skeleton";
+import { teks } from "../../src/lib/i18n";
+import { useRiwayatPencarian } from "../../src/lib/riwayatPencarian";
+import { colors, sizes } from "../../src/theme/tokens";
 import { apiService } from "../../services/apiService";
-import { Product, ProductCategory } from "../../services/types";
+import type { Product, ProductCategory } from "../../services/types";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 
 /** Override filter untuk satu kali pemanggilan (menghindari state basi). */
@@ -25,10 +35,33 @@ interface SearchParams {
   priceRange?: { min: string; max: string };
 }
 
-const SearchScreen = () => {
+const SORT_OPTIONS = [
+  { key: "nama_produk", label: "Nama A-Z", direction: "asc" as const },
+  { key: "nama_produk", label: "Nama Z-A", direction: "desc" as const },
+  { key: "harga", label: "Harga Terendah", direction: "asc" as const },
+  { key: "harga", label: "Harga Tertinggi", direction: "desc" as const },
+  { key: "created_at", label: "Terbaru", direction: "desc" as const },
+  { key: "stok", label: "Stok Terbanyak", direction: "desc" as const },
+];
+
+/**
+ * Pencarian Zovora — guideline §3.4 + §4 (Search) + §5.
+ *
+ * Tiga keadaan sesuai pola layar:
+ * 1. awal (query kosong): recent searches (avatar 48 + "Hapus Semua") dan
+ *    trending (thumbnail kotak rounded-md) — keduanya digeser horizontal;
+ * 2. mengetik: daftar saran baris 52 dengan thumbnail 28, bagian yang cocok
+ *    dicetak tebal, ikon arrow-up-left mengisi kolom pencarian;
+ * 3. hasil: grid produk 2 kolom; tanpa hasil → EmptyState pola §5.
+ *
+ * Filter harga, kategori, dan sorting dari versi sebelumnya DIPERTAHANKAN
+ * (termasuk fallback filter harga sisi klien karena rute publik backend
+ * mengabaikan `harga_min`/`harga_max`).
+ */
+export default function SearchScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
-  const initialQuery = (params.query as string) || "";
+  const initialQuery = typeof params.query === "string" ? params.query : "";
 
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [products, setProducts] = useState<Product[]>([]);
@@ -43,93 +76,51 @@ const SearchScreen = () => {
   const [loading, setLoading] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [searchHistory, setSearchHistory] = useState<string[]>([]);
+  /** Kata yang sudah benar-benar dikirim ke API (pembanding mode saran). */
+  const [kataDicari, setKataDicari] = useState(initialQuery);
 
-  const sortOptions = [
-    { key: "nama_produk", label: "Nama A-Z", direction: "asc" },
-    { key: "nama_produk", label: "Nama Z-A", direction: "desc" },
-    { key: "harga", label: "Harga Terendah", direction: "asc" },
-    { key: "harga", label: "Harga Tertinggi", direction: "desc" },
-    { key: "created_at", label: "Terbaru", direction: "desc" },
-    { key: "stok", label: "Stok Terbanyak", direction: "desc" },
-  ];
+  const { riwayat, tambah: tambahRiwayat, hapusSemua } = useRiwayatPencarian();
 
-  const formatPrice = (price?: number | null) => {
-    return new Intl.NumberFormat("id-ID", {
-      style: "currency",
-      currency: "IDR",
-      minimumFractionDigits: 0,
-    }).format(price ?? 0);
-  };
-
-  const loadCategories = React.useCallback(async () => {
-    try {
-      const categoriesData = await apiService.getProductCategories();
-      setCategories(categoriesData);
-    } catch (error: any) {
-      console.error("Error loading categories:", error);
-    }
-  }, []);
-
-  const addToSearchHistory = (query: string) => {
-    if (!query) return;
-
-    setSearchHistory((prev) => {
-      const filtered = prev.filter((item) => item !== query);
-      return [query, ...filtered].slice(0, 10); // Keep only last 10 searches
-    });
-  };
-
-  const searchProducts = React.useCallback(
+  const searchProducts = useCallback(
     async (overrides: Partial<SearchParams> = {}) => {
       setLoading(true);
       setError(null);
 
+      // Nilai filter diambil dari `overrides` lebih dulu: state React belum
+      // tentu sudah ter-update saat handler memanggil fungsi ini.
+      const query = overrides.query ?? searchQuery;
+      const kategori = overrides.kategoriId ?? selectedCategory;
+      const urut = overrides.sortBy ?? sortBy;
+      const arah = overrides.sortDirection ?? sortDirection;
+      const harga = overrides.priceRange ?? priceRange;
+
+      const permintaan: Record<string, unknown> = {
+        per_page: 50,
+        sort_by: urut,
+        sort_direction: arah,
+      };
+
+      if (query.trim()) {
+        permintaan.search = query.trim();
+        tambahRiwayat(query.trim());
+      }
+      if (kategori) permintaan.kategori_id = kategori;
+
+      const hargaMin = parseInt(harga.min, 10);
+      const hargaMax = parseInt(harga.max, 10);
+      if (!Number.isNaN(hargaMin)) permintaan.min_harga = hargaMin;
+      if (!Number.isNaN(hargaMax)) permintaan.max_harga = hargaMax;
+
       try {
-        // PENTING: nilai filter diambil dari `overrides` lebih dulu.
-        // Sebelumnya handler memanggil `setSelectedCategory(x)` lalu
-        // `searchProducts()` — callback memoized masih memegang state LAMA,
-        // sehingga filter kategori/sorting tidak pernah benar-benar diterapkan.
-        const query = overrides.query ?? searchQuery;
-        const kategori = overrides.kategoriId ?? selectedCategory;
-        const urut = overrides.sortBy ?? sortBy;
-        const arah = overrides.sortDirection ?? sortDirection;
-        const harga = overrides.priceRange ?? priceRange;
-
-        const params: any = {
-          per_page: 50,
-          sort_by: urut,
-          sort_direction: arah,
-        };
-
-        if (query.trim()) {
-          params.search = query.trim();
-          addToSearchHistory(query.trim());
-        }
-
-        if (kategori) {
-          params.kategori_id = kategori;
-        }
-
-        // Rentang harga: backend memakai harga_min/harga_max
-        const hargaMin = parseInt(harga.min, 10);
-        const hargaMax = parseInt(harga.max, 10);
-        if (!Number.isNaN(hargaMin)) {
-          params.min_harga = hargaMin;
-        }
-        if (!Number.isNaN(hargaMax)) {
-          params.max_harga = hargaMax;
-        }
-
-        const result = await apiService.searchProducts(params);
+        const result = await apiService.searchProducts(permintaan as never);
+        const produk = result.data ?? [];
 
         /**
          * Backend mengabaikan `harga_min`/`harga_max` pada rute publik
-         * (`/public/products` memanggil `getProducts($request, false)`, dan
-         * filter harga hanya dijalankan bila `$isPublic === true`).
-         * Tanpa fallback ini, filter harga tampak "tidak berefek".
+         * (`/public/products` memanggil `getProducts($request, false)` dan
+         * filter harga hanya jalan bila `$isPublic === true`). Tanpa fallback
+         * ini filter harga tampak "tidak berefek".
          */
-        const produk = result.data ?? [];
         const tersaring = produk.filter((item) => {
           const hargaProduk = Number(item.harga) || 0;
           if (!Number.isNaN(hargaMin) && hargaProduk < hargaMin) return false;
@@ -138,39 +129,69 @@ const SearchScreen = () => {
         });
 
         setProducts(tersaring);
-      } catch (error: any) {
-        console.error("Error searching products:", error);
-        const isAuthError = await handleAuthError(error);
-        if (!isAuthError) {
-          setError(getErrorMessage(error));
-        }
+        setKataDicari(query.trim());
+      } catch (e) {
+        const isAuthError = await handleAuthError(e);
+        if (!isAuthError) setError(getErrorMessage(e));
       } finally {
         setLoading(false);
       }
     },
-    [searchQuery, sortBy, sortDirection, selectedCategory, priceRange]
+    [searchQuery, sortBy, sortDirection, selectedCategory, priceRange, tambahRiwayat],
   );
 
-  const handleSearch = () => {
-    searchProducts({ query: searchQuery });
-  };
+  const jalankanPencarian = useCallback(
+    (kata: string) => {
+      setSearchQuery(kata);
+      searchProducts({ query: kata });
+    },
+    [searchProducts],
+  );
 
-  const handleProductPress = (product: Product) => {
-    router.push(`/product/${product.id}`);
-  };
+  useEffect(() => {
+    // SetState dipisah ke tugas async agar tidak terjadi sinkron di body effect
+    // (pola fetch-on-mount yang sama dengan layar lain, tanpa warning).
+    let aktif = true;
+    (async () => {
+      try {
+        const data = await apiService.getProductCategories();
+        if (aktif) setCategories(data);
+      } catch {
+        /* kategori hanya pelengkap filter; pencarian tetap jalan */
+      }
+      if (aktif && initialQuery) searchProducts({ query: initialQuery });
+    })();
+    return () => {
+      aktif = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleCategoryFilter = (categoryId: number | null) => {
-    setSelectedCategory(categoryId);
-    searchProducts({ kategoriId: categoryId });
-  };
+  const adaQuery = searchQuery.trim().length > 0;
+  /** Kolom kosong → selalu tampilkan recent + trending (guideline §3.4). */
+  const modeAwal = !adaQuery;
+  /** Query berubah sejak pencarian terakhir → tampilkan saran dulu. */
+  const modeSaran = adaQuery && searchQuery.trim() !== kataDicari.trim();
 
-  const handleSortChange = (sortKey: string, direction: "asc" | "desc") => {
-    setSortBy(sortKey);
-    setSortDirection(direction);
-    searchProducts({ sortBy: sortKey, sortDirection: direction });
-  };
+  /* ------------------------------------------------------------------ */
+  /* Saran: gabungan nama produk yang sudah ada + nama kategori.         */
+  /* ------------------------------------------------------------------ */
+  const kolamSaran = useMemo(() => {
+    const dariProduk = products.slice(0, 40).map((p) => p.nama_produk);
+    const dariKategori = categories.map((c) => c.nama_kategori);
+    return Array.from(new Set([...dariProduk, ...dariKategori]));
+  }, [products, categories]);
 
-  const clearFilters = () => {
+  const saran = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return [];
+    return kolamSaran.filter((s) => s.toLowerCase().includes(q)).slice(0, 8);
+  }, [kolamSaran, searchQuery]);
+
+  /** Trending: nama kategori teratas — sumber nyata, bukan data karangan. */
+  const trending = useMemo(() => categories.slice(0, 10), [categories]);
+
+  const resetFilter = () => {
     const kosong = { min: "", max: "" };
     setSelectedCategory(null);
     setSortBy("nama_produk");
@@ -184,294 +205,406 @@ const SearchScreen = () => {
     });
   };
 
-  const handleHistorySearch = (query: string) => {
-    setSearchQuery(query);
-    searchProducts({ query });
-  };
-
-  useEffect(() => {
-    loadCategories();
-    if (initialQuery) {
-      searchProducts({ query: initialQuery });
-    }
-  }, []);
-
-  if (error) {
-    return (
-      <SafeAreaView
-        className="flex-1 bg-background"
-        edges={["top", "left", "right"]}
-      >
-        <Navbar title="Search" showBackButton={true} />
-        <View className="flex-1 justify-center items-center px-4">
-          <View className="bg-red-50 border border-red-200 rounded-xl p-4 w-full">
-            <Text className="text-red-700 text-center">{error}</Text>
-          </View>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
+  /* ------------------------------- render --------------------------- */
   return (
-    <SafeAreaView
-      className="flex-1 bg-background"
-      edges={["top", "left", "right"]}
-    >
-      <Navbar title="Search" showBackButton={true} />
-
-      {/* Search Bar */}
-      <View className="bg-white p-4">
-        <View className="flex-row items-center">
-          <View className="flex-1 flex-row items-center bg-gray-100 rounded-xl px-4 py-3 mr-3">
-            <Ionicons name="search-outline" size={20} color="#6B7280" />
-            <TextInput
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              placeholder="Cari produk..."
-              className="flex-1 ml-2"
-              returnKeyType="search"
-              onSubmitEditing={handleSearch}
-            />
-            {searchQuery.length > 0 && (
-              <Pressable onPress={() => setSearchQuery("")}>
-                <Ionicons name="close-circle" size={20} color="#6B7280" />
-              </Pressable>
-            )}
-          </View>
-
+    <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
+      <AppBar
+        title={teks.judul.search}
+        onBack={() => router.back()}
+        right={
           <Pressable
-            onPress={() => setShowFilters(!showFilters)}
-            className="p-3 bg-primary rounded-xl"
+            onPress={() => setShowFilters((v) => !v)}
+            accessibilityRole="button"
+            accessibilityLabel={teks.a11y.bukaFilter}
+            accessibilityState={{ expanded: showFilters }}
+            hitSlop={sizes.hitSlop}
+            className="h-11 w-11 items-center justify-center rounded-full"
           >
-            <Ionicons name="options-outline" size={20} color="white" />
+            <SlidersHorizontal
+              size={20}
+              color={showFilters ? colors.primary600 : colors.neutral700}
+              strokeWidth={1.75}
+            />
           </Pressable>
-        </View>
+        }
+      />
 
-        {/* Search History */}
-        {!searchQuery && searchHistory.length > 0 && (
-          <View className="mt-4">
-            <Text className="text-gray-700 font-medium mb-2">
-              Pencarian Terakhir
+      <View className="border-b border-neutral-100 bg-white px-4 pb-3 pt-1">
+        <SearchBar
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onSubmit={() => searchProducts({ query: searchQuery })}
+          onBack={() => router.back()}
+          autoFocus={!initialQuery}
+          tanpaAksiSuara
+        />
+
+        {/* Filter & sorting — dipertahankan dari versi sebelumnya. */}
+        {showFilters ? (
+          <View className="mt-3">
+            <Text className="mb-2 font-inter-medium text-sm text-neutral-900">
+              {teks.pencarian.urutkan}
             </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {searchHistory.map((query, index) => (
-                <Pressable
-                  key={index}
-                  onPress={() => handleHistorySearch(query)}
-                  className="bg-gray-100 px-3 py-2 rounded-full mr-2"
-                >
-                  <Text className="text-gray-700">{query}</Text>
-                </Pressable>
-              ))}
+              <View className="flex-row gap-2">
+                {SORT_OPTIONS.map((opt) => (
+                  <Chip
+                    key={`${opt.key}-${opt.direction}`}
+                    label={opt.label}
+                    selected={sortBy === opt.key && sortDirection === opt.direction}
+                    onPress={() => {
+                      setSortBy(opt.key);
+                      setSortDirection(opt.direction);
+                      searchProducts({ sortBy: opt.key, sortDirection: opt.direction });
+                    }}
+                  />
+                ))}
+              </View>
             </ScrollView>
-          </View>
-        )}
-      </View>
 
-      {/* Filters */}
-      {showFilters && (
-        <View className="bg-white border-t border-gray-200 p-4">
-          {/* Category Filter */}
-          <View className="mb-4">
-            <Text className="font-medium mb-2">Kategori</Text>
+            <Text className="mb-2 mt-3 font-inter-medium text-sm text-neutral-900">
+              {teks.pencarian.kategori}
+            </Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <Pressable
-                onPress={() => handleCategoryFilter(null)}
-                className={`px-4 py-2 rounded-full mr-2 ${
-                  selectedCategory === null ? "bg-primary" : "bg-gray-100"
-                }`}
-              >
-                <Text
-                  className={`font-medium ${
-                    selectedCategory === null ? "text-white" : "text-gray-700"
-                  }`}
-                >
-                  Semua
-                </Text>
-              </Pressable>
-
-              {categories.map((category) => (
-                <Pressable
-                  key={category.id}
-                  onPress={() => handleCategoryFilter(category.id)}
-                  className={`px-4 py-2 rounded-full mr-2 ${
-                    selectedCategory === category.id
-                      ? "bg-primary"
-                      : "bg-gray-100"
-                  }`}
-                >
-                  <Text
-                    className={`font-medium ${
-                      selectedCategory === category.id
-                        ? "text-white"
-                        : "text-gray-700"
-                    }`}
-                  >
-                    {category.nama_kategori}
-                  </Text>
-                </Pressable>
-              ))}
+              <View className="flex-row gap-2">
+                <Chip
+                  label={teks.umum.semua}
+                  selected={selectedCategory === null}
+                  onPress={() => {
+                    setSelectedCategory(null);
+                    searchProducts({ kategoriId: null });
+                  }}
+                />
+                {categories.map((c) => (
+                  <Chip
+                    key={c.id}
+                    label={c.nama_kategori}
+                    selected={selectedCategory === c.id}
+                    onPress={() => {
+                      setSelectedCategory(c.id);
+                      searchProducts({ kategoriId: c.id });
+                    }}
+                  />
+                ))}
+              </View>
             </ScrollView>
-          </View>
 
-          {/* Sort Options */}
-          <View className="mb-4">
-            <Text className="font-medium mb-2">Urutkan</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              {sortOptions.map((option, index) => (
-                <Pressable
-                  key={index}
-                  onPress={() =>
-                    handleSortChange(
-                      option.key,
-                      option.direction as "asc" | "desc"
-                    )
-                  }
-                  className={`px-4 py-2 rounded-full mr-2 ${
-                    sortBy === option.key && sortDirection === option.direction
-                      ? "bg-primary"
-                      : "bg-gray-100"
-                  }`}
-                >
-                  <Text
-                    className={`font-medium ${
-                      sortBy === option.key &&
-                      sortDirection === option.direction
-                        ? "text-white"
-                        : "text-gray-700"
-                    }`}
-                  >
-                    {option.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
-          </View>
-
-          {/* Price Range */}
-          <View className="mb-4">
-            <Text className="font-medium mb-2">Rentang Harga</Text>
-            <View className="flex-row items-center">
+            <Text className="mb-2 mt-3 font-inter-medium text-sm text-neutral-900">
+              {teks.pencarian.rentangHarga}
+            </Text>
+            <View className="flex-row items-center gap-2">
               <TextInput
                 value={priceRange.min}
-                onChangeText={(text) =>
-                  setPriceRange((prev) => ({ ...prev, min: text }))
-                }
-                placeholder="Min"
+                onChangeText={(t) => setPriceRange((p) => ({ ...p, min: t }))}
+                placeholder={teks.pencarian.hargaMin}
+                placeholderTextColor={colors.neutral400}
                 keyboardType="numeric"
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 mr-2"
+                className="flex-1 rounded-md border border-neutral-200 bg-white px-3 font-inter text-sm text-neutral-900"
+                style={{ height: sizes.input }}
+                accessibilityLabel={teks.pencarian.hargaMin}
               />
-              <Text className="mx-2 text-gray-500">-</Text>
+              <Text className="font-inter text-neutral-500">–</Text>
               <TextInput
                 value={priceRange.max}
-                onChangeText={(text) =>
-                  setPriceRange((prev) => ({ ...prev, max: text }))
-                }
-                placeholder="Max"
+                onChangeText={(t) => setPriceRange((p) => ({ ...p, max: t }))}
+                placeholder={teks.pencarian.hargaMax}
+                placeholderTextColor={colors.neutral400}
                 keyboardType="numeric"
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 ml-2"
+                className="flex-1 rounded-md border border-neutral-200 bg-white px-3 font-inter text-sm text-neutral-900"
+                style={{ height: sizes.input }}
+                accessibilityLabel={teks.pencarian.hargaMax}
               />
             </View>
-          </View>
 
-          {/* Filter Actions */}
-          <View className="flex-row space-x-3">
-            <Pressable
-              onPress={clearFilters}
-              className="flex-1 bg-gray-100 py-2 rounded-xl items-center"
-            >
-              <Text className="font-medium text-gray-700">Reset</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => {
-                setShowFilters(false);
-                searchProducts();
-              }}
-              className="flex-1 bg-primary py-2 rounded-xl items-center"
-            >
-              <Text className="font-medium text-white">Terapkan</Text>
-            </Pressable>
-          </View>
-        </View>
-      )}
-
-      {/* Search Results */}
-      <View className="flex-1">
-        {loading ? (
-          <View className="flex-1 justify-center items-center">
-            <Text className="text-gray-500">Mencari produk...</Text>
-          </View>
-        ) : products.length === 0 && searchQuery ? (
-          <View className="flex-1 justify-center items-center px-4">
-            <Ionicons name="search-outline" size={80} color="#9CA3AF" />
-            <Text className="text-xl font-semibold text-gray-600 mt-4 mb-2">
-              Produk Tidak Ditemukan
-            </Text>
-            <Text className="text-gray-500 text-center mb-6">
-              Tidak ada produk yang cocok dengan pencarian {`"${searchQuery}"`}
-            </Text>
-            <Pressable
-              onPress={() => {
-                setSearchQuery("");
-                clearFilters();
-              }}
-              className="bg-primary px-6 py-3 rounded-xl"
-            >
-              <Text className="text-white font-semibold">Reset Pencarian</Text>
-            </Pressable>
-          </View>
-        ) : (
-          <FlatList
-            data={products}
-            numColumns={2}
-            columnWrapperStyle={{ justifyContent: "space-between" }}
-            contentContainerStyle={{ padding: 16 }}
-            keyExtractor={(item) => item.id.toString()}
-            renderItem={({ item }) => (
+            <View className="mt-3 flex-row gap-3">
               <Pressable
-                className="bg-white rounded-xl p-3 w-[48%] mb-4 shadow-sm"
-                onPress={() => handleProductPress(item)}
+                onPress={resetFilter}
+                accessibilityRole="button"
+                accessibilityLabel={teks.pencarian.reset}
+                className="flex-1 items-center justify-center rounded-md border border-neutral-200 bg-white"
+                style={{ height: sizes.buttonMd }}
               >
-                <View className="bg-gray-200 h-32 rounded-lg mb-2 overflow-hidden">
-                  <Image
-                    source={{
-                      uri:
-                        item.gambar_url ||
-                        "https://via.placeholder.com/300x200/E5E7EB/9CA3AF?text=No+Image",
-                    }}
-                    style={{ width: "100%", height: "100%" }}
-                    resizeMode="cover"
-                  />
-                </View>
-                <Text className="font-medium mb-1" numberOfLines={2}>
-                  {item.nama_produk}
-                </Text>
-                <Text className="text-gray-500 text-xs">
-                  {item.kategori_nama}
-                </Text>
-                <Text className="text-primary font-bold mt-1">
-                  {formatPrice(item.harga)}
-                </Text>
-                <Text className="text-xs text-gray-500 mt-1">
-                  Stok: {item.stok}
+                <Text className="font-inter-semibold text-sm text-neutral-700">
+                  {teks.pencarian.reset}
                 </Text>
               </Pressable>
-            )}
-            ListHeaderComponent={
-              searchQuery && products.length > 0 ? (
-                <View className="mb-4">
-                  <Text className="text-gray-700">
-                    Ditemukan {products.length} produk untuk {`"${searchQuery}"`}
-                  </Text>
-                </View>
-              ) : null
-            }
-          />
-        )}
+              <Pressable
+                onPress={() => {
+                  setShowFilters(false);
+                  searchProducts();
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={teks.pencarian.terapkan}
+                className="flex-1 items-center justify-center rounded-md bg-primary-600"
+                style={{ height: sizes.buttonMd }}
+              >
+                <Text className="font-inter-semibold text-sm text-white">
+                  {teks.pencarian.terapkan}
+                </Text>
+              </Pressable>
+            </View>
+          </View>
+        ) : null}
       </View>
+
+      {/* ---------------------------- konten ---------------------------- */}
+      {modeAwal ? (
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ paddingBottom: 24 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          {/* Recent searches — judul + "Hapus Semua" + avatar bulat 48. */}
+          {riwayat.length > 0 ? (
+            <View className="pt-4">
+              <View className="mb-3 flex-row items-center justify-between px-4">
+                <Text className="font-inter-semibold text-base text-neutral-900">
+                  {teks.judul.recentSearches}
+                </Text>
+                <Pressable
+                  onPress={hapusSemua}
+                  accessibilityRole="button"
+                  accessibilityLabel={teks.pencarian.hapusRiwayat}
+                  hitSlop={sizes.hitSlop}
+                  className="flex-row items-center"
+                  style={{ minHeight: sizes.minTouchTarget }}
+                >
+                  <Trash2 size={14} color={colors.primary700} strokeWidth={1.75} />
+                  <Text className="ml-1 font-inter-medium text-xs text-primary-700">
+                    {teks.tombol.clearAll}
+                  </Text>
+                </Pressable>
+              </View>
+
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 16, gap: 16 }}
+              >
+                {riwayat.map((kata) => (
+                  <Pressable
+                    key={kata}
+                    onPress={() => jalankanPencarian(kata)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${teks.judul.recentSearches}: ${kata}`}
+                    className="items-center active:opacity-70"
+                    style={{ width: 64 }}
+                  >
+                    <View
+                      className="items-center justify-center rounded-full bg-primary-50"
+                      style={{ width: 48, height: 48 }}
+                    >
+                      <Search size={20} color={colors.primary600} strokeWidth={1.75} />
+                    </View>
+                    <Text
+                      className="mt-1.5 text-center font-inter text-xs text-neutral-700"
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={1.3}
+                    >
+                      {kata}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          {/* Trending — thumbnail kotak rounded-md (guideline §3.4). */}
+          {trending.length > 0 ? (
+            <View className="pt-6">
+              <View className="mb-3 flex-row items-center gap-1.5 px-4">
+                <TrendingUp size={16} color={colors.primary600} strokeWidth={1.75} />
+                <Text className="font-inter-semibold text-base text-neutral-900">
+                  {teks.pencarian.trending}
+                </Text>
+              </View>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}
+              >
+                {trending.map((k) => (
+                  <Pressable
+                    key={k.id}
+                    onPress={() => {
+                      setSelectedCategory(k.id);
+                      jalankanPencarian(k.nama_kategori);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={k.nama_kategori}
+                    className="overflow-hidden rounded-md border border-neutral-100 bg-white active:opacity-80"
+                    style={{ width: 96 }}
+                  >
+                    <View style={{ height: 72 }} className="bg-neutral-50">
+                      {k.gambar_url ? (
+                        <Image
+                          source={{ uri: k.gambar_url }}
+                          style={{ width: "100%", height: "100%" }}
+                          resizeMode="cover"
+                        />
+                      ) : (
+                        <View className="h-full w-full items-center justify-center">
+                          <ImageIcon size={22} color={colors.neutral300} strokeWidth={1.75} />
+                        </View>
+                      )}
+                    </View>
+                    <Text
+                      className="p-2 font-inter-medium text-xs text-neutral-900"
+                      numberOfLines={1}
+                      maxFontSizeMultiplier={1.3}
+                    >
+                      {k.nama_kategori}
+                    </Text>
+                  </Pressable>
+                ))}
+              </ScrollView>
+            </View>
+          ) : null}
+
+          {/* Ajakan awal bila belum ada riwayat/trending. */}
+          {riwayat.length === 0 && trending.length === 0 ? (
+            <View className="pt-10">
+              <EmptyState
+                icon={<Search size={36} color={colors.primary600} strokeWidth={1.75} />}
+                title={teks.pencarian.mulaiCari}
+                description={teks.pencarian.mulaiCariDeskripsi}
+              />
+            </View>
+          ) : null}
+        </ScrollView>
+      ) : loading ? (
+        <View className="p-4">
+          <SkeletonGridProduk jumlah={4} />
+        </View>
+      ) : error ? (
+        <View className="p-4">
+          <EmptyState
+            icon={<Search size={36} color={colors.primary600} strokeWidth={1.75} />}
+            title={teks.empty.jaringan.judul}
+            description={error}
+            ctaLabel={teks.tombol.cobaLagi}
+            onCtaPress={() => searchProducts({ query: searchQuery })}
+          />
+        </View>
+      ) : modeSaran && saran.length > 0 ? (
+        /* Daftar saran — baris 52, thumbnail 28, teks tebal pada bagian cocok. */
+        <ScrollView keyboardShouldPersistTaps="handled" className="flex-1">
+          <Text className="px-4 pb-1 pt-4 font-inter-semibold text-xs text-neutral-500">
+            {teks.pencarian.saran}
+          </Text>
+          {saran.map((s) => (
+            <BarisSaran
+              key={s}
+              teksSaran={s}
+              query={searchQuery}
+              onPress={() => jalankanPencarian(s)}
+            />
+          ))}
+        </ScrollView>
+      ) : products.length === 0 ? (
+        <View className="flex-1 justify-center px-4">
+          <EmptyState
+            icon={<Search size={36} color={colors.primary600} strokeWidth={1.75} />}
+            title={teks.empty.pencarian.judul}
+            description={teks.empty.pencarian.deskripsi}
+            ctaLabel={teks.tombol.belanjaSekarang}
+            onCtaPress={() => {
+              setSearchQuery("");
+              resetFilter();
+            }}
+          />
+        </View>
+      ) : (
+        <FlatList
+          data={products}
+          numColumns={2}
+          keyExtractor={(item) => String(item.id)}
+          columnWrapperStyle={{ gap: 12 }}
+          contentContainerStyle={{ padding: 16, gap: 12 }}
+          keyboardShouldPersistTaps="handled"
+          initialNumToRender={8}
+          ListHeaderComponent={
+            <Text
+              className="mb-3 font-inter text-xs text-neutral-500"
+              accessibilityRole="header"
+            >
+              {adaQuery
+                ? teks.pencarian.hasilUntuk.replace("{query}", searchQuery.trim())
+                : teks.pencarian.jumlahHasil.replace("{jumlah}", String(products.length))}
+            </Text>
+          }
+          renderItem={({ item }) => (
+            <View style={{ width: "47.5%", flexGrow: 1, maxWidth: "48.5%" }}>
+              <ProductCardGrid
+                produk={item}
+                onPress={() => router.push(`/product/${item.id}`)}
+              />
+            </View>
+          )}
+        />
+      )}
     </SafeAreaView>
   );
-};
+}
 
-export default SearchScreen;
+/**
+ * Baris saran — tinggi 52, thumbnail 28 `rounded-sm`, teks Body dengan bagian
+ * yang cocok dicetak tebal, tombol arrow-up-left di kanan mengisi kolom
+ * pencarian (guideline §3.4), divider neutral-100.
+ */
+function BarisSaran({
+  teksSaran,
+  query,
+  onPress,
+}: {
+  teksSaran: string;
+  query: string;
+  onPress: () => void;
+}) {
+  const q = query.trim().toLowerCase();
+  const posisi = q ? teksSaran.toLowerCase().indexOf(q) : -1;
+
+  return (
+    <View className="border-b border-neutral-100">
+      <Pressable
+        onPress={onPress}
+        accessibilityRole="button"
+        accessibilityLabel={`${teksSaran}`}
+        className="flex-row items-center gap-3 px-4 active:bg-neutral-50"
+        style={{ height: 52 }}
+      >
+        <View
+          className="items-center justify-center rounded-sm bg-neutral-100"
+          style={{ width: 28, height: 28 }}
+        >
+          <Search size={14} color={colors.neutral500} strokeWidth={1.75} />
+        </View>
+
+        <Text className="flex-1 font-inter text-sm text-neutral-900" numberOfLines={1}>
+          {posisi < 0 ? (
+            teksSaran
+          ) : (
+            <>
+              {teksSaran.slice(0, posisi)}
+              <Text className="font-inter-semibold text-neutral-900">
+                {teksSaran.slice(posisi, posisi + q.length)}
+              </Text>
+              {teksSaran.slice(posisi + q.length)}
+            </>
+          )}
+        </Text>
+
+        <Pressable
+          onPress={onPress}
+          accessibilityRole="button"
+          accessibilityLabel={teks.pencarian.gunakanSaran.replace("{saran}", teksSaran)}
+          hitSlop={sizes.hitSlop}
+          className="items-center justify-center"
+          style={{ width: 44, height: 44 }}
+        >
+          <ArrowUpLeft size={18} color={colors.neutral400} strokeWidth={1.75} />
+        </Pressable>
+      </Pressable>
+    </View>
+  );
+}
