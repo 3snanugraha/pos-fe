@@ -28,8 +28,9 @@ interface PointRow {
   keterangan?: string | null;
   saldo_sebelum?: number | null;
   saldo_sesudah?: number | null;
-  tanggal?: string | null;
-  dibuat_pada?: string | null;
+  /** Epoch detik dari backend (bisa juga string ISO pada versi lain). */
+  tanggal?: string | number | null;
+  dibuat_pada?: string | number | null;
   transaksi?: { nomor_transaksi?: string } | null;
 }
 
@@ -75,10 +76,32 @@ const JENIS_META: {
   },
 };
 
-const formatDate = (value?: string | null): string => {
-  if (!value) return "-";
-  const ms = Date.parse(value);
-  if (Number.isNaN(ms)) return "-";
+/**
+ * Backend mengirim `tanggal`/`dibuat_pada` sebagai **epoch detik** (mis.
+ * 1792650491), bukan string ISO. `Date.parse(1792650491)` selalu NaN sehingga
+ * kolom tanggal tampil "-". Konversi dulu ke milidetik.
+ */
+const toMs = (value?: string | number | null): number | null => {
+  if (value === null || value === undefined || value === "") return null;
+
+  if (typeof value === "number") {
+    if (!Number.isFinite(value)) return null;
+    return value < 1e12 ? value * 1000 : value;
+  }
+
+  const trimmed = String(value).trim();
+  if (/^\d+$/.test(trimmed)) {
+    const n = Number(trimmed);
+    return n < 1e12 ? n * 1000 : n;
+  }
+
+  const ms = Date.parse(trimmed);
+  return Number.isNaN(ms) ? null : ms;
+};
+
+const formatDate = (value?: string | number | null): string => {
+  const ms = toMs(value);
+  if (ms === null) return "-";
   return new Date(ms).toLocaleString("id-ID", {
     day: "numeric",
     month: "short",
@@ -109,8 +132,8 @@ const PointsHistoryScreen = () => {
           .slice()
           .sort(
             (a, b) =>
-              Date.parse(b.tanggal ?? b.dibuat_pada ?? "") -
-              Date.parse(a.tanggal ?? a.dibuat_pada ?? "")
+              (toMs(b.tanggal ?? b.dibuat_pada) ?? 0) -
+              (toMs(a.tanggal ?? a.dibuat_pada) ?? 0)
           )
       );
       setProfile(profileData);
