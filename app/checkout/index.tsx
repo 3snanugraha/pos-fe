@@ -16,6 +16,7 @@ import { CartItem, useCart } from "../../contexts/CartContext";
 import { apiService } from "../../services/apiService";
 import { CustomerAddress, CustomerProfile, PaymentMethod } from "../../services/types";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
+import { formatAlamatLengkap, formatAlamatWilayah } from "../../utils/formatters";
 import {
   buildCatatanWithSplit,
   buildPaymentInstruction,
@@ -317,7 +318,7 @@ const CheckoutScreen = () => {
 
     setIsProcessingOrder(true);
 
-    const fullAddress = `${selectedAddress.alamat_lengkap}, ${selectedAddress.kota}, ${selectedAddress.provinsi} ${selectedAddress.kode_pos}`;
+    const fullAddress = formatAlamatLengkap(selectedAddress);
 
     try {
       const catatanAkhir = useSplit
@@ -519,9 +520,11 @@ const CheckoutScreen = () => {
                           {address.telepon_penerima}
                         </Text>
                         <Text className="text-gray-600">{address.alamat_lengkap}</Text>
-                        <Text className="text-gray-600">
-                          {address.kota}, {address.provinsi} {address.kode_pos}
-                        </Text>
+                        {formatAlamatWilayah(address) !== "" && (
+                          <Text className="text-gray-600">
+                            {formatAlamatWilayah(address)}
+                          </Text>
+                        )}
                       </View>
                       <Ionicons
                         name={
@@ -946,10 +949,11 @@ const CheckoutScreen = () => {
                 <Text className="text-gray-600 mt-1">
                   {selectedAddress.alamat_lengkap}
                 </Text>
-                <Text className="text-gray-600">
-                  {selectedAddress.kota}, {selectedAddress.provinsi}{" "}
-                  {selectedAddress.kode_pos}
-                </Text>
+                {formatAlamatWilayah(selectedAddress) !== "" && (
+                  <Text className="text-gray-600">
+                    {formatAlamatWilayah(selectedAddress)}
+                  </Text>
+                )}
               </View>
             )}
 

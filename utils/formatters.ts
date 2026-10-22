@@ -31,6 +31,45 @@ export const formatStock = (stock: number | string | null | undefined): number =
 };
 
 /**
+ * Susun alamat satu baris tanpa bagian kosong.
+ *
+ * Backend menyimpan `kota`/`provinsi`/`kode_pos` sebagai string kosong pada
+ * data lama. Menyambungnya mentah-mentah menghasilkan "Jl. X, , " — baik di
+ * layar maupun di `alamat_pengiriman` yang tersimpan ke order. Bagian kosong
+ * dilewati dan pemisah koma hanya dipasang di antara bagian yang ada.
+ */
+export const formatAlamatLengkap = (alamat?: {
+  alamat_lengkap?: string | null;
+  kota?: string | null;
+  provinsi?: string | null;
+  kode_pos?: string | null;
+} | null): string => {
+  if (!alamat) return "";
+  const bersih = (v?: string | null) => (v ?? "").trim();
+  const bagian = [bersih(alamat.alamat_lengkap), bersih(alamat.kota), bersih(alamat.provinsi)]
+    .filter((v) => v !== "");
+  const kodePos = bersih(alamat.kode_pos);
+  if (kodePos) bagian.push(kodePos);
+  return bagian.join(", ");
+};
+
+/** Bagian wilayah saja (kota / provinsi / kode pos), tanpa alamat utama. */
+export const formatAlamatWilayah = (alamat?: {
+  kota?: string | null;
+  provinsi?: string | null;
+  kode_pos?: string | null;
+} | null): string => {
+  if (!alamat) return "";
+  const bersih = (v?: string | null) => (v ?? "").trim();
+  const bagian = [bersih(alamat.kota), bersih(alamat.provinsi)].filter(
+    (v) => v !== ""
+  );
+  const kodePos = bersih(alamat.kode_pos);
+  if (kodePos) bagian.push(kodePos);
+  return bagian.join(", ");
+};
+
+/**
  * Validasi dan format URL gambar
  */
 export const formatImageUrl = (
