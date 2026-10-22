@@ -114,9 +114,32 @@ const WishlistScreen = () => {
 
   const handleAddToCart = async (item: BackendWishlistItem) => {
     try {
-      // Get full product details for cart
+      /**
+       * Produk dengan varian wajib masuk keranjang lewat varian pertama.
+       * Tanpa varian, id baris keranjang jadi `produkId` (bukan
+       * `produkId+varianId`) sehingga muncul sebagai item duplikat dari
+       * baris yang sama saat ditambahkan dari halaman detail produk.
+       * `harga` backend berupa string desimal, jadi dinormalisasi ke number.
+       */
       const product = await apiService.getProduct(item.id);
-      await addItem(product, 1);
+      const varian = product.varian?.[0];
+      const stok = varian ? Number(varian.stok) || 0 : Number(product.stok) || 0;
+
+      if (stok <= 0) {
+        Alert.alert(
+          "Stok Habis",
+          `${item.nama_produk || "Produk"} sedang tidak tersedia.`
+        );
+        return;
+      }
+
+      await addItem(
+        { ...product, harga: Number(product.harga) || 0, stok },
+        1,
+        varian
+          ? { ...varian, harga: Number(varian.harga_jual) || Number(product.harga) || 0 }
+          : undefined
+      );
 
       Alert.alert(
         "Berhasil!",

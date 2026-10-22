@@ -1,4 +1,4 @@
-import { Linking } from "react-native";
+import { Linking, Platform } from "react-native";
 import { EscPosEncoder } from "./escpos";
 
 interface OrderPrintData {
@@ -27,6 +27,10 @@ interface StoreInfo {
   footer: string;
 }
 
+export type PrintResult =
+  | { ok: true; mode: "rawbt" | "browser" }
+  | { ok: false; reason: "no-app" | "error"; message?: string };
+
 const DEFAULT_STORE: StoreInfo = {
   name: "Toko Kami",
   address: "",
@@ -48,10 +52,11 @@ const formatDate = (dateString: string): string => {
   });
 };
 
-export const printOrderReceipt = async (
+/** Susun payload ESC/POS untuk satu order. */
+export const buildOrderReceipt = (
   order: OrderPrintData,
   storeInfo?: Partial<StoreInfo>
-): Promise<boolean> => {
+): EscPosEncoder => {
   const store = { ...DEFAULT_STORE, ...storeInfo };
   const encoder = new EscPosEncoder();
 
@@ -142,16 +147,75 @@ export const printOrderReceipt = async (
 
   encoder.cut();
 
+  return encoder;
+};
+
+/**
+ * Unduh payload ESC/POS mentah (`*.bin`) di browser.
+ *
+ * Dipakai sebagai jalur aman saat `rawbt:` tidak tersedia (web/desktop):
+ * berkas bisa dicetak lewat RawBT "print file", driver printer thermal,
+ * atau `copy /b file.bin \\\\.\\COM3`.
+ */
+const downloadReceiptBinary = (order: OrderPrintData): boolean => {
+  if (typeof document === "undefined") return false;
+
+  const encoder = buildOrderReceipt(order);
+  const base64 = encoder.toBase64();
+  const binary = atob(base64);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) {
+    bytes[i] = binary.charCodeAt(i);
+  }
+
+  const blob = new Blob([bytes], { type: "application/octet-stream" });
+  const url = URL.createObjectURL(blob);
+  const nama = `struk-${order.nomor_transaksi || order.id}.bin`;
+
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = nama;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+
+  // Beri waktu browser memulai unduhan sebelum URL dilepas.
+  window.setTimeout(() => URL.revokeObjectURL(url), 4000);
+  return true;
+};
+
+export const printOrderReceipt = async (
+  order: OrderPrintData,
+  storeInfo?: Partial<StoreInfo>
+): Promise<PrintResult> => {
+  const encoder = buildOrderReceipt(order, storeInfo);
   const uri = encoder.getURI();
+
+  // Web tidak punya intent `rawbt:`; unduh berkas ESC/POS agar tombol tidak
+  // terasa mati dan struk tetap bisa dicetak lewat printer thermal.
+  if (Platform.OS === "web") {
+    try {
+      const ok = downloadReceiptBinary(order);
+      return ok
+        ? { ok: true, mode: "browser" }
+        : { ok: false, reason: "error", message: "Browser tidak mendukung unduhan." };
+    } catch (error: any) {
+      return {
+        ok: false,
+        reason: "error",
+        message: error?.message ?? "Gagal membuat berkas struk.",
+      };
+    }
+  }
 
   try {
     const canOpen = await Linking.canOpenURL(uri);
     if (!canOpen) {
-      return false;
+      return { ok: false, reason: "no-app" };
     }
     await Linking.openURL(uri);
-    return true;
-  } catch {
-    return false;
+    return { ok: true, mode: "rawbt" };
+  } catch (error: any) {
+    return { ok: false, reason: "error", message: error?.message };
   }
 };

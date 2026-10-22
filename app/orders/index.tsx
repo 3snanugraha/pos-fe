@@ -150,16 +150,26 @@ const OrderHistoryScreen = () => {
           ? produk.varian?.find((v) => v.id === item.varian_id)
           : undefined;
 
-        const stokTersedia = varian?.stok ?? produk.stok ?? produk.total_stok ?? 0;
+        /**
+         * Stok harus dari varian bila item punya varian: `produk.stok` adalah
+         * total seluruh varian, sehingga item varian tertentu bisa lolos
+         * meski stok variannya 0. Varian juga wajib dikirim ke `addItem`
+         * supaya id keranjang konsisten (produkId+varianId) dan tidak
+         * menghasilkan baris keranjang duplikat.
+         */
+        const stokTersedia = varian
+          ? Number(varian.stok) || 0
+          : Number(produk.stok ?? produk.total_stok ?? 0) || 0;
+
         if (stokTersedia <= 0) {
           dilewati.push(item.nama_produk ?? `Produk #${item.produk_id}`);
           continue;
         }
 
         await addItem(
-          produk,
+          { ...produk, stok: produk.stok ?? stokTersedia },
           Math.min(item.jumlah, stokTersedia),
-          varian ? { ...varian, harga: varian.harga_jual } : undefined
+          varian ? { ...varian, harga: Number(varian.harga_jual) } : undefined
         );
         berhasil += 1;
       } catch (err) {

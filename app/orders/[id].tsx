@@ -164,7 +164,7 @@ const OrderDetailScreen = () => {
     try {
       // `printReceipt` mengharapkan angka, sedangkan backend mengirim desimal
       // sebagai string — normalisasi dulu.
-      const success = await printOrderReceipt({
+      const hasil = await printOrderReceipt({
         id: order.id,
         nomor_transaksi: order.nomor_transaksi,
         tanggal_transaksi: order.tanggal_transaksi,
@@ -186,7 +186,18 @@ const OrderDetailScreen = () => {
           subtotal: Number(item.subtotal) || 0,
         })),
       });
-      if (!success) {
+
+      if (hasil.ok) {
+        if (hasil.mode === "browser") {
+          Alert.alert(
+            "Struk diunduh",
+            "Berkas struk ESC/POS (.bin) tersimpan di folder unduhan. Kirim ke printer thermal lewat RawBT (menu Print File) atau driver printer."
+          );
+        }
+        return;
+      }
+
+      if (hasil.reason === "no-app") {
         Alert.alert(
           "Aplikasi Tidak Ditemukan",
           "Untuk mencetak struk, silakan install aplikasi RawBT atau Thermer dari Play Store.",
@@ -202,7 +213,10 @@ const OrderDetailScreen = () => {
             },
           ]
         );
+        return;
       }
+
+      Alert.alert("Error", hasil.message || "Gagal mencetak struk");
     } catch (error) {
       console.error("Print error:", error);
       Alert.alert("Error", "Gagal mencetak struk");

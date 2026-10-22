@@ -56,7 +56,45 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const cartData = await AsyncStorage.getItem(CART_STORAGE_KEY);
       if (cartData) {
         const parsedCart = JSON.parse(cartData);
-        setItems(parsedCart);
+        if (Array.isArray(parsedCart)) {
+          /**
+           * Migrasi baris keranjang lama: `id` dulu dihitung dengan
+           * penggabungan string (rapuh & bisa tabrakan), dan `harga`/`stok`
+           * bisa tersimpan sebagai string karena backend mengirim desimal
+           * sebagai string. Hitung ulang id + normalisasi angka supaya
+           * `updateItemQuantity`/`removeItem` tetap menemukan barisnya.
+           */
+          const dinormalisasi: CartItem[] = parsedCart.map((item: any) => {
+            const harga = Number(item.harga) || 0;
+            const quantity = Number(item.quantity) || 1;
+            const stok = Number(item.stok_tersedia) || quantity;
+            return {
+              ...item,
+              id: generateCartItemId(Number(item.produk_id), item.varian_id ?? undefined),
+              harga,
+              quantity,
+              stok_tersedia: stok,
+              subtotal: harga * quantity,
+            };
+          });
+
+          // Gabungkan baris yang ternyata sama setelah id dihitung ulang.
+          const digabung: CartItem[] = [];
+          for (const item of dinormalisasi) {
+            const ada = digabung.find((x) => x.id === item.id);
+            if (!ada) {
+              digabung.push(item);
+              continue;
+            }
+            const total = ada.quantity + item.quantity;
+            ada.quantity = Math.min(total, ada.stok_tersedia);
+            ada.subtotal = ada.harga * ada.quantity;
+          }
+
+          setItems(digabung);
+        } else {
+          setItems([]);
+        }
       }
     } catch (error) {
       console.error('Error loading cart from storage:', error);
@@ -73,45 +111,89 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }
   };
 
+  /**
+   * ID baris keranjang.
+   *
+   * Sebelumnya `parseInt(\`${productId}${varianId}\`)` — penggabungan string
+   * tanpa pemisah, sehingga produk 1+varian 12 dan produk 11+varian 2
+   * menghasilkan id yang SAMA (112) dan item saling menimpa.
+   */
   const generateCartItemId = (productId: number, varianId?: number) => {
-    return varianId ? parseInt(`${productId}${varianId}`) : productId;
+    return varianId
+      ? productId * 1_000_000 + varianId
+      : productId * 1_000_000;
   };
 
   const addItem = async (product: any, quantity: number = 1, varian?: any) => {
     const itemId = generateCartItemId(product.id, varian?.id);
-    const existingItem = items.find(item => item.id === itemId);
+
+    /**
+     * Buang baris lama tanpa varian untuk produk yang sama.
+     *
+     * Baris seperti ini bisa tersisa dari versi app sebelumnya (wishlist dulu
+     * menambahkan produk bervarian TANPA varian). Kalau dibiarkan, keranjang
+     * menampilkan dua baris untuk produk yang sama dan salah satunya tidak
+     * bisa diproses backend (varian_id kosong).
+     */
+    const bersihkanLegacy = (daftar: CartItem[]) =>
+      varian
+        ? daftar.filter(
+            (item) => !(item.produk_id === product.id && !item.varian_id)
+          )
+        : daftar;
+
+    const itemsBersih = bersihkanLegacy(items);
+    const existingItem = itemsBersih.find((item) => item.id === itemId);
+
+    /** Stok acuan: stok varian bila item bervarian, jika tidak stok produk. */
+    const stokAcuan = Number(
+      varian?.stok ?? product.stok ?? product.total_stok ?? 0
+    ) || 0;
+    const hargaSatuan =
+      Number(varian?.harga ?? varian?.harga_jual ?? product.harga) || 0;
 
     if (existingItem) {
       // Update existing item quantity
       const newQuantity = existingItem.quantity + quantity;
-      const maxQuantity = existingItem.stok_tersedia;
-      
+      const maxQuantity = Math.min(existingItem.stok_tersedia, stokAcuan);
+
       if (newQuantity > maxQuantity) {
         throw new Error(`Stok tidak mencukupi. Maksimal ${maxQuantity} item.`);
       }
 
-      await updateItemQuantity(itemId, newQuantity);
+      setItems((prev) =>
+        bersihkanLegacy(prev).map((item) =>
+          item.id === itemId
+            ? {
+                ...item,
+                quantity: newQuantity,
+                stok_tersedia: stokAcuan || item.stok_tersedia,
+                subtotal: item.harga * newQuantity,
+              }
+            : item
+        )
+      );
     } else {
       // Add new item
-      if (quantity > product.stok) {
-        throw new Error(`Stok tidak mencukupi. Maksimal ${product.stok} item.`);
+      if (quantity > stokAcuan) {
+        throw new Error(`Stok tidak mencukupi. Maksimal ${stokAcuan} item.`);
       }
 
       const newItem: CartItem = {
         id: itemId,
         produk_id: product.id,
         nama_produk: product.nama_produk,
-        harga: varian?.harga || product.harga,
+        harga: hargaSatuan,
         quantity,
         gambar_url: product.gambar_url,
         kategori_nama: product.kategori_nama,
-        stok_tersedia: product.stok,
+        stok_tersedia: stokAcuan,
         varian_id: varian?.id,
         varian_nama: varian?.nama_varian,
-        subtotal: (varian?.harga || product.harga) * quantity,
+        subtotal: hargaSatuan * quantity,
       };
 
-      setItems(prevItems => [...prevItems, newItem]);
+      setItems((prev) => [...bersihkanLegacy(prev), newItem]);
     }
   };
 

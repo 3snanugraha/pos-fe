@@ -196,8 +196,9 @@ const extractMetaCsrf = (html: string): string | null => {
  * Token CSRF dari cookie `XSRF-TOKEN` (Laravel mengirim nilai ter-encrypt,
  * dan middleware `VerifyCsrfToken` menerima header `X-XSRF-TOKEN`).
  *
- * Ini jalur cadangan saat HTML halaman login tidak bisa dibaca lewat `fetch`
- * (di web, permintaan dokumen HTML kadang diblokir walau path sama-origin).
+ * CATATAN: nilai ini TIDAK bisa dipakai sebagai field `_token` pada form login
+ * (sudah terenkripsi → Laravel membalas 419). Pakai hanya untuk header
+ * `X-XSRF-TOKEN`, atau lebih aman pakai `_token` dari HTML form login.
  */
 const csrfFromCookie = (): string | null => {
   if (typeof document === "undefined") return null;
@@ -208,11 +209,13 @@ const csrfFromCookie = (): string | null => {
 /**
  * Pastikan ada sesi web kasir (cookie + CSRF) untuk verify/reject.
  *
- * Strategi berlapis, dari yang paling murah:
+ * Urutan strategi:
  * 1. Sudah ada sesi aktif (halaman kasir mengirim meta csrf) → pakai itu.
- *    Kasir yang login di back-office pada origin yang sama akan lolos di sini.
- * 2. Ambil token dari cookie `XSRF-TOKEN` lalu login lewat form web.
- * 3. Baca `_token` dari HTML halaman login (butuh fetch dokumen HTML).
+ * 2. Ambil `_token` dari HTML form login (`<input name="_token">`) lalu login.
+ *    Ini satu-satunya token yang diterima middleware CSRF untuk POST form;
+ *    cookie `XSRF-TOKEN` terenkripsi sehingga selalu 419 bila dipakai
+ *    sebagai `_token`.
+ * 3. Cadangan: meta csrf halaman login.
  */
 export const loginStaffSession = async (
   email: string,
@@ -226,43 +229,28 @@ export const loginStaffSession = async (
     // belum ada sesi — lanjut login.
   }
 
-  // 2. Login lewat cookie CSRF.
-  const cookieToken = csrfFromCookie();
-  if (cookieToken) {
-    const body = new URLSearchParams({ _token: cookieToken, email, password });
-    try {
-      await fetch(`${API_ORIGIN}/login`, {
-        method: "POST",
-        credentials: "include",
-        redirect: "follow",
-        headers: {
-          "Content-Type": "application/x-www-form-urlencoded",
-          Accept: "text/html",
-        },
-        body: body.toString(),
-      });
-      await refreshCsrfToken();
-      return;
-    } catch {
-      // lanjut ke jalur HTML.
-    }
-  }
-
-  // 3. Jalur HTML klasik.
+  // 2. Ambil token form dari halaman login.
+  let formToken: string | null = null;
   try {
     const loginPage = await fetch(`${API_ORIGIN}/login`, {
       credentials: "include",
       headers: { Accept: "text/html" },
     });
     const html = await loginPage.text();
-    const token = extractLoginCsrf(html);
+    formToken = extractLoginCsrf(html) ?? extractMetaCsrf(html);
+  } catch {
+    formToken = null;
+  }
 
-    if (!token) {
-      throw new StaffSessionUnavailableError(
-        "Token CSRF halaman login kasir tidak dapat dibaca."
-      );
-    }
+  const token = formToken ?? csrfFromCookie();
+  if (!token) {
+    throw new StaffSessionUnavailableError(
+      "Token CSRF halaman login kasir tidak dapat dibaca.",
+      isCrossOriginWeb()
+    );
+  }
 
+  try {
     const body = new URLSearchParams({ _token: token, email, password });
     const loginResponse = await fetch(`${API_ORIGIN}/login`, {
       method: "POST",
@@ -275,10 +263,19 @@ export const loginStaffSession = async (
       body: body.toString(),
     });
 
-    // Login gagal mengembalikan halaman form lagi (200).
     const afterLogin = await loginResponse.text();
-    if (/name="password"/.test(afterLogin) && !/kasir|dashboard/i.test(afterLogin)) {
-      throw new StaffSessionUnavailableError("Email atau password kasir salah.");
+
+    // Login gagal mengembalikan halaman form lagi (200).
+    if (/name="password"/.test(afterLogin)) {
+      throw new StaffSessionUnavailableError(
+        "Email atau password kasir salah."
+      );
+    }
+
+    if (loginResponse.status === 419) {
+      throw new StaffSessionUnavailableError(
+        "Token CSRF login kasir kedaluwarsa. Muat ulang halaman lalu coba lagi."
+      );
     }
 
     await refreshCsrfToken();
