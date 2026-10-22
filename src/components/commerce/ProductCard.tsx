@@ -79,7 +79,7 @@ export function ProductCardGrid({ produk, onPress, width, className = "" }: Prod
 
         {diskon > 0 ? (
           <View className="absolute left-2 top-2">
-            <Badge label={`-${diskon}%`} accessibilityLabel={`Diskon ${diskon} persen`} />
+            <Badge label={`-${diskon}%`} accessibilityLabel={teks.produk.diskonPersen.replace("{persen}", String(diskon))} />
           </View>
         ) : null}
 
@@ -246,7 +246,7 @@ export function ProductCardHorizontal({
                 </Text>
               ) : null}
               {diskon > 0 ? (
-                <Badge label={`-${diskon}%`} accessibilityLabel={`Diskon ${diskon} persen`} />
+                <Badge label={`-${diskon}%`} accessibilityLabel={teks.produk.diskonPersen.replace("{persen}", String(diskon))} />
               ) : null}
             </View>
           </Pressable>

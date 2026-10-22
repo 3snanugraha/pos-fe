@@ -36,12 +36,12 @@ interface SearchParams {
 }
 
 const SORT_OPTIONS = [
-  { key: "nama_produk", label: "Nama A-Z", direction: "asc" as const },
-  { key: "nama_produk", label: "Nama Z-A", direction: "desc" as const },
-  { key: "harga", label: "Harga Terendah", direction: "asc" as const },
-  { key: "harga", label: "Harga Tertinggi", direction: "desc" as const },
-  { key: "created_at", label: "Terbaru", direction: "desc" as const },
-  { key: "stok", label: "Stok Terbanyak", direction: "desc" as const },
+  { key: "nama_produk", label: teks.pencarian.urut.namaAZ, direction: "asc" as const },
+  { key: "nama_produk", label: teks.pencarian.urut.namaZA, direction: "desc" as const },
+  { key: "harga", label: teks.pencarian.urut.hargaTerendah, direction: "asc" as const },
+  { key: "harga", label: teks.pencarian.urut.hargaTertinggi, direction: "desc" as const },
+  { key: "created_at", label: teks.pencarian.urut.terbaru, direction: "desc" as const },
+  { key: "stok", label: teks.pencarian.urut.stokTerbanyak, direction: "desc" as const },
 ];
 
 /**

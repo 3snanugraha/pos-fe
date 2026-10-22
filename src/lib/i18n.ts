@@ -470,6 +470,14 @@ export const teks = {
     mulaiCariDeskripsi: "Ketik nama produk, merek, atau kategori yang Anda cari.",
     riwayatKosong: "Belum ada pencarian terakhir.",
     ulangiCari: "Atur Ulang Pencarian",
+    urut: {
+      namaAZ: "Nama A-Z",
+      namaZA: "Nama Z-A",
+      hargaTerendah: "Harga Terendah",
+      hargaTertinggi: "Harga Tertinggi",
+      terbaru: "Terbaru",
+      stokTerbanyak: "Stok Terbanyak",
+    },
   },
 
   /** Detail produk (W3). */
@@ -492,6 +500,21 @@ export const teks = {
     tambahKeranjangBerhasil: "{nama} ditambahkan ke keranjang",
     pilihVarianDulu: "Pilih varian dulu",
     galeriProduk: "Galeri produk",
+    diskonPersen: "Diskon {persen} persen",
+  },
+
+  /** Barang disimpan (W4) — dialog & umpan balik. */
+  simpanan: {
+    hapusJudul: "Hapus dari Simpanan?",
+    hapusDeskripsi: "Hapus {nama} dari barang tersimpan?",
+    hapusGagal: "Gagal menghapus produk dari simpanan.",
+    stokHabisJudul: "Stok Habis",
+    stokHabisDeskripsi: "{nama} sedang tidak tersedia.",
+    tambahBerhasilJudul: "Ditambahkan ke Keranjang",
+    tambahBerhasilDeskripsi: "{nama} ditambahkan ke keranjang.",
+    lihatKeranjang: "Lihat Keranjang",
+    lanjutBelanja: "Lanjut Belanja",
+    tambahGagal: "Gagal menambahkan produk ke keranjang.",
   },
 
   /** Ulasan (W3). */
@@ -765,6 +788,43 @@ export const teks = {
       cta: "Lihat Semua",
     },
     pilihKategori: "Pilih kategori",
+  },
+
+  /** Layar kasir (W5) — login staf & verifikasi order online. */
+  kasir: {
+    judul: "Order Masuk",
+    judulLengkap: "Order Masuk (Kasir)",
+    loginJudul: "Login Kasir / Admin",
+    loginDeskripsi:
+      "Hanya akun Admin atau Super Admin yang dapat memakai endpoint API staf. Akun kasir dapat memverifikasi lewat halaman web kasir.",
+    masuk: "Masuk",
+    emailPlaceholder: "admin@toko.com",
+    passwordPlaceholder: "••••••••",
+    emailWajib: "Email dan password wajib diisi.",
+    loginGagal: "Login staf gagal. Periksa email/password.",
+    sesiBerakhir: "Sesi staf berakhir, silakan login ulang.",
+    muatGagal: "Gagal memuat order masuk.",
+    memuat: "Memuat order masuk…",
+    kosong: {
+      judul: "Tidak Ada Order Menunggu",
+      deskripsi: "Semua pesanan online sudah diverifikasi atau ditolak.",
+    },
+    itemTidakAda: "Detail item tidak tersedia",
+    kirimKe: "Kirim ke",
+    catatanPelanggan: "Catatan pelanggan",
+    menunggu: "Menunggu",
+    kedaluwarsa: "Order sudah kedaluwarsa",
+    sisaWaktu: "Sisa waktu bayar {waktu}",
+    alasanPlaceholder: "Alasan penolakan (opsional)",
+    verifikasi: "Verifikasi",
+    tolak: "Tolak",
+    batalTolak: "Batal Tolak",
+    tolakPesanan: "Tolak Pesanan",
+    bukaHalamanKasir: "Buka Halaman Kasir Backend",
+    catatan: "Catatan",
+    verifikasiGagal: "Verifikasi gagal.",
+    tolakGagal: "Penolakan gagal.",
+    keluar: "Keluar sesi staf",
   },
 
   satuan: {

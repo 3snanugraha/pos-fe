@@ -1,7 +1,7 @@
 import { Heart } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
-import { Alert, Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
+import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   ErrorState,
@@ -9,7 +9,7 @@ import {
   Skeleton,
 } from "../../src/components/commerce";
 import { AppBar } from "../../src/components/layout";
-import { EmptyState } from "../../src/components/ui";
+import { Button, Dialog, EmptyState } from "../../src/components/ui";
 import { teks } from "../../src/lib/i18n";
 import type { ProdukApi } from "../../src/lib/produk";
 import { colors } from "../../src/theme/tokens";
@@ -63,6 +63,9 @@ const WishlistScreen = () => {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dialog, setDialog] = useState<"hapus" | null>(null);
+  const [hapusTarget, setHapusTarget] = useState<BackendWishlistItem | null>(null);
+  const [pesan, setPesan] = useState<{ judul: string; isi: string } | null>(null);
 
   const ambilWishlist = useCallback(async () => {
     try {
@@ -120,21 +123,17 @@ const WishlistScreen = () => {
     try {
       await apiService.removeFromWishlist(item.id);
       setWishlistItems((prev) => prev.filter((row) => row.id !== item.id));
+      setDialog(null);
     } catch (err: any) {
       console.error("Error removing from wishlist:", err);
-      Alert.alert("Error", "Gagal menghapus produk dari wishlist");
+      setDialog(null);
+      setPesan({ judul: teks.umum.gagal, isi: teks.simpanan.hapusGagal });
     }
   };
 
   const konfirmasiHapus = (item: BackendWishlistItem) => {
-    Alert.alert(
-      "Hapus dari Simpanan",
-      `Hapus ${item.nama_produk || "produk ini"} dari barang tersimpan?`,
-      [
-        { text: teks.umum.batal, style: "cancel" },
-        { text: teks.umum.hapus, style: "destructive", onPress: () => hapus(item) },
-      ]
-    );
+    setHapusTarget(item);
+    setDialog("hapus");
   };
 
   const handleAddToCart = async (item: BackendWishlistItem) => {
@@ -150,10 +149,13 @@ const WishlistScreen = () => {
       const stok = varian ? Number(varian.stok) || 0 : Number(product.stok) || 0;
 
       if (stok <= 0) {
-        Alert.alert(
-          "Stok Habis",
-          `${item.nama_produk || "Produk"} sedang tidak tersedia.`
-        );
+        setPesan({
+          judul: teks.simpanan.stokHabisJudul,
+          isi: teks.simpanan.stokHabisDeskripsi.replace(
+            "{nama}",
+            item.nama_produk || teks.satuan.produk
+          ),
+        });
         return;
       }
 
@@ -165,17 +167,16 @@ const WishlistScreen = () => {
           : undefined
       );
 
-      Alert.alert(
-        "Berhasil!",
-        `${item.nama_produk || "Produk"} ditambahkan ke keranjang`,
-        [
-          { text: "Lanjut Belanja", style: "cancel" },
-          { text: "Lihat Keranjang", onPress: () => router.push("/(tabs)/cart") },
-        ]
-      );
+      setPesan({
+        judul: teks.simpanan.tambahBerhasilJudul,
+        isi: teks.simpanan.tambahBerhasilDeskripsi.replace(
+          "{nama}",
+          item.nama_produk || teks.satuan.produk
+        ),
+      });
     } catch (err: any) {
       console.error("Error adding to cart:", err);
-      Alert.alert("Error", "Gagal menambahkan produk ke keranjang");
+      setPesan({ judul: teks.umum.gagal, isi: teks.simpanan.tambahGagal });
     }
   };
 
@@ -249,6 +250,62 @@ const WishlistScreen = () => {
           </View>
         </ScrollView>
       )}
+
+      {/* Konfirmasi hapus — pola Dialog (Alert tidak punya callback di web). */}
+      <Dialog
+        visible={dialog === "hapus"}
+        onClose={() => setDialog(null)}
+        title={teks.simpanan.hapusJudul}
+        description={teks.simpanan.hapusDeskripsi.replace(
+          "{nama}",
+          hapusTarget?.nama_produk || teks.satuan.produk
+        )}
+        actions={
+          <>
+            <Button
+              title={teks.umum.batal}
+              variant="outline"
+              size="md"
+              className="flex-1"
+              onPress={() => setDialog(null)}
+            />
+            <Button
+              title={teks.umum.hapus}
+              size="md"
+              className="flex-1"
+              onPress={() => hapusTarget && hapus(hapusTarget)}
+            />
+          </>
+        }
+      />
+
+      {/* Umpan balik tambah ke keranjang. */}
+      <Dialog
+        visible={pesan !== null}
+        onClose={() => setPesan(null)}
+        title={pesan?.judul}
+        description={pesan?.isi}
+        actions={
+          <>
+            <Button
+              title={teks.simpanan.lanjutBelanja}
+              variant="outline"
+              size="md"
+              className="flex-1"
+              onPress={() => setPesan(null)}
+            />
+            <Button
+              title={teks.simpanan.lihatKeranjang}
+              size="md"
+              className="flex-1"
+              onPress={() => {
+                setPesan(null);
+                router.push("/(tabs)/cart");
+              }}
+            />
+          </>
+        }
+      />
     </SafeAreaView>
   );
 };

@@ -315,7 +315,7 @@ export default function ProductDetailScreen() {
               </Text>
             ) : null}
             {diskon > 0 ? (
-              <Badge label={`-${diskon}%`} accessibilityLabel={`Diskon ${diskon} persen`} />
+              <Badge label={`-${diskon}%`} accessibilityLabel={teks.produk.diskonPersen.replace("{persen}", String(diskon))} />
             ) : null}
           </View>
 

@@ -1,8 +1,14 @@
-import { Ionicons } from "@expo/vector-icons";
+import {
+  CheckCheck,
+  Clock,
+  LogOut,
+  PackageCheck,
+  RefreshCw,
+  ShieldCheck,
+  XCircle,
+} from "lucide-react-native";
 import { useCallback, useEffect, useState } from "react";
 import {
-  ActivityIndicator,
-  Alert,
   Linking,
   Pressable,
   RefreshControl,
@@ -12,7 +18,12 @@ import {
   View,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Navbar from "../../components/Navbar";
+import { ErrorState, Skeleton, StickyBar } from "../../src/components/commerce";
+import { AppBar } from "../../src/components/layout";
+import { Button, EmptyState, Input } from "../../src/components/ui";
+import { rupiah, tanggalWaktu } from "../../src/lib/format";
+import { teks } from "../../src/lib/i18n";
+import { colors, sizes } from "../../src/theme/tokens";
 import {
   StaffApiError,
   StaffSessionUnavailableError,
@@ -28,9 +39,8 @@ import {
   verifyOnlineOrder,
   type StaffUser,
 } from "../../services/staffSession";
-import { Transaction } from "../../services/types";
-import { formatDateTime, useOrderExpiry } from "../../utils/orderExpiry";
-import { formatRupiah } from "../../utils/payment";
+import type { Transaction } from "../../services/types";
+import { useOrderExpiry } from "../../utils/orderExpiry";
 
 interface KasirOrder {
   transaction: Transaction;
@@ -47,7 +57,16 @@ interface KasirOrder {
   total: number;
 }
 
-const KasirOrdersScreen = () => {
+/**
+ * Order Masuk (Kasir) Zovora — guideline §3.2 (form login) + §3.9 (kartu) + §5.
+ *
+ * Dua keadaan: gate login staf (form email + password di kartu putih) dan
+ * daftar order pending dengan aksi Verifikasi / Tolak inline. Semua logika
+ * sesi staf (`loginStaff`, `loginStaffSession`, `verifyOnlineOrder`,
+ * `rejectOnlineOrder`) tidak berubah — hanya tampilan dan copy yang
+ * dilokalisasi. Konfirmasi tidak memakai `Alert` (callback tidak jalan di web).
+ */
+export default function KasirOrdersScreen() {
   const [staff, setStaff] = useState<StaffUser | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [email, setEmail] = useState("");
@@ -66,7 +85,6 @@ const KasirOrdersScreen = () => {
   } | null>(null);
 
   const loadOrders = useCallback(async () => {
-    setLoading(true);
     setError(null);
 
     try {
@@ -105,9 +123,9 @@ const KasirOrdersScreen = () => {
       } else if (err instanceof StaffApiError && err.status === 401) {
         await clearStaffSession();
         setStaff(null);
-        setError("Sesi staf berakhir, silakan login ulang.");
+        setError(teks.kasir.sesiBerakhir);
       } else {
-        setError(err?.message ?? "Gagal memuat order masuk.");
+        setError(err?.message ?? teks.kasir.muatGagal);
       }
     } finally {
       setLoading(false);
@@ -126,7 +144,7 @@ const KasirOrdersScreen = () => {
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
-      Alert.alert("Login", "Email dan password wajib diisi.");
+      setError(teks.kasir.emailWajib);
       return;
     }
 
@@ -143,19 +161,18 @@ const KasirOrdersScreen = () => {
         await loginStaffSession(email.trim(), password);
       } catch (sessionError: any) {
         // Tidak fatal: daftar order tetap bisa dibaca via API token.
-        Alert.alert(
-          "Catatan",
-          sessionError?.message ??
-            "Sesi web kasir tidak dapat dibuka; verifikasi mungkin gagal."
-        );
+        setActionMessage({
+          tipe: "error",
+          teks:
+            sessionError?.message ??
+            teks.kasir.loginDeskripsi,
+        });
       }
 
       await loadOrders();
     } catch (err: any) {
       setError(
-        err instanceof StaffApiError
-          ? err.message
-          : "Login staf gagal. Periksa email/password."
+        err instanceof StaffApiError ? err.message : teks.kasir.loginGagal
       );
     } finally {
       setLoggingIn(false);
@@ -199,7 +216,7 @@ const KasirOrdersScreen = () => {
       } else {
         setActionMessage({
           tipe: "error",
-          teks: err?.message ?? "Verifikasi gagal.",
+          teks: err?.message ?? teks.kasir.verifikasiGagal,
         });
       }
     } finally {
@@ -211,7 +228,10 @@ const KasirOrdersScreen = () => {
     setBusyId(order.transaction.id);
     setActionMessage(null);
     try {
-      const result = await rejectOnlineOrder(order.transaction.id, rejectReason.trim());
+      const result = await rejectOnlineOrder(
+        order.transaction.id,
+        rejectReason.trim()
+      );
       setActionMessage({
         tipe: "sukses",
         teks: `${order.transaction.nomor_transaksi}: ${result.message}`,
@@ -225,7 +245,7 @@ const KasirOrdersScreen = () => {
       } else {
         setActionMessage({
           tipe: "error",
-          teks: err?.message ?? "Penolakan gagal.",
+          teks: err?.message ?? teks.kasir.tolakGagal,
         });
       }
     } finally {
@@ -238,14 +258,20 @@ const KasirOrdersScreen = () => {
     loadOrders();
   };
 
-  // ---- Login gate --------------------------------------------------------
+  // ---- Gate login staf ---------------------------------------------------
 
   if (checkingSession) {
     return (
-      <SafeAreaView className="flex-1 bg-background" edges={["top", "left", "right"]}>
-        <Navbar title="Order Masuk" showBackButton={true} />
-        <View className="flex-1 justify-center items-center">
-          <ActivityIndicator size="large" color="#3B82F6" />
+      <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
+        <AppBar title={teks.kasir.judul} showBack={false} />
+        <View className="px-4 pt-4">
+          <View className="rounded-lg border border-neutral-200 bg-white p-4">
+            <Skeleton height={16} width="45%" />
+            <Skeleton height={12} width="90%" className="mt-3" />
+            <Skeleton height={48} width="100%" className="mt-4" />
+            <Skeleton height={48} width="100%" className="mt-4" />
+            <Skeleton height={48} width="100%" className="mt-4" />
+          </View>
         </View>
       </SafeAreaView>
     );
@@ -253,59 +279,76 @@ const KasirOrdersScreen = () => {
 
   if (!staff) {
     return (
-      <SafeAreaView className="flex-1 bg-background" edges={["top", "left", "right"]}>
-        <Navbar title="Order Masuk (Kasir)" showBackButton={true} />
-        <ScrollView className="flex-1 p-4">
-          <View className="bg-white rounded-xl p-4">
-            <View className="flex-row items-center mb-3">
-              <Ionicons name="shield-checkmark-outline" size={22} color="#1E40AF" />
-              <Text className="font-bold text-lg ml-2">Login Kasir / Admin</Text>
+      <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
+        <AppBar title={teks.kasir.judulLengkap} onBack={() => undefined} />
+        <ScrollView
+          className="flex-1"
+          contentContainerStyle={{ padding: 16 }}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View className="rounded-lg border border-neutral-200 bg-white p-4">
+            <View className="mb-2 flex-row items-center gap-2">
+              <View
+                className="items-center justify-center rounded-full bg-primary-100"
+                style={{ width: 36, height: 36 }}
+              >
+                <ShieldCheck size={20} color={colors.primary600} strokeWidth={1.75} />
+              </View>
+              <Text
+                className="flex-1 font-inter-semibold text-base text-neutral-900"
+                accessibilityRole="header"
+                maxFontSizeMultiplier={1.3}
+              >
+                {teks.kasir.loginJudul}
+              </Text>
             </View>
-            <Text className="text-gray-500 text-sm mb-4">
-              Hanya akun Admin atau Super Admin yang dapat memakai endpoint API
-              staf. Akun kasir dapat memverifikasi lewat halaman web kasir.
+            <Text
+              className="mb-4 font-inter text-xs text-neutral-500"
+              maxFontSizeMultiplier={1.3}
+            >
+              {teks.kasir.loginDeskripsi}
             </Text>
 
-            <Text className="text-sm font-medium text-gray-700 mb-1">Email</Text>
-            <TextInput
-              value={email}
-              onChangeText={setEmail}
-              placeholder="admin@toko.com"
-              keyboardType="email-address"
-              autoCapitalize="none"
-              className="border border-gray-300 rounded-xl px-3 py-2 bg-gray-50 mb-3"
-            />
+            <View style={{ gap: 16 }}>
+              <Input
+                label={teks.field.email}
+                value={email}
+                onChangeText={setEmail}
+                placeholder={teks.kasir.emailPlaceholder}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                autoComplete="email"
+                editable={!loggingIn}
+              />
+              <Input
+                label={teks.field.password}
+                value={password}
+                onChangeText={setPassword}
+                placeholder={teks.kasir.passwordPlaceholder}
+                password
+                autoCapitalize="none"
+                autoComplete="current-password"
+                editable={!loggingIn}
+                onSubmitEditing={handleLogin}
+              />
+            </View>
 
-            <Text className="text-sm font-medium text-gray-700 mb-1">Password</Text>
-            <TextInput
-              value={password}
-              onChangeText={setPassword}
-              placeholder="••••••••"
-              secureTextEntry
-              className="border border-gray-300 rounded-xl px-3 py-2 bg-gray-50 mb-4"
-            />
-
-            {error && (
-              <View className="bg-red-50 border border-red-200 rounded-lg p-3 mb-3">
-                <Text className="text-red-700 text-sm">{error}</Text>
+            {error ? (
+              <View className="mt-4 rounded-md border border-danger-100 bg-danger-50 p-3">
+                <Text className="font-inter text-xs text-danger-700">{error}</Text>
               </View>
-            )}
-
-            <Pressable
-              onPress={handleLogin}
-              disabled={loggingIn}
-              className={`py-3 rounded-xl items-center ${
-                loggingIn ? "bg-gray-300" : "bg-primary"
-              }`}
-            >
-              {loggingIn ? (
-                <ActivityIndicator size="small" color="white" />
-              ) : (
-                <Text className="text-white font-semibold">Masuk</Text>
-              )}
-            </Pressable>
+            ) : null}
           </View>
         </ScrollView>
+
+        <StickyBar>
+          <Button
+            title={teks.kasir.masuk}
+            loading={loggingIn}
+            fullWidth
+            onPress={handleLogin}
+          />
+        </StickyBar>
       </SafeAreaView>
     );
   }
@@ -313,116 +356,152 @@ const KasirOrdersScreen = () => {
   // ---- Daftar order ------------------------------------------------------
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={["top", "left", "right"]}>
-      <Navbar
-        title="Order Masuk"
-        showBackButton={true}
-        rightAction={
-          <Pressable onPress={handleLogout} hitSlop={8}>
-            <Ionicons name="log-out-outline" size={22} color="white" />
+    <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
+      <AppBar
+        title={teks.kasir.judul}
+        onBack={() => undefined}
+        right={
+          <Pressable
+            onPress={handleLogout}
+            accessibilityRole="button"
+            accessibilityLabel={teks.kasir.keluar}
+            hitSlop={sizes.hitSlop}
+            className="h-11 w-11 items-center justify-center"
+          >
+            <LogOut size={22} color={colors.neutral700} strokeWidth={1.75} />
           </Pressable>
         }
       />
 
       <ScrollView
         className="flex-1"
+        contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            colors={[colors.primary600]}
+            tintColor={colors.primary600}
+          />
         }
       >
-        <View className="p-4">
-          <View className="bg-white rounded-xl p-3 mb-4 flex-row items-center">
-            <Ionicons name="person-circle-outline" size={22} color="#1E40AF" />
-            <View className="ml-2 flex-1">
-              <Text className="font-medium text-gray-900 text-sm">
-                {staff.name}
-              </Text>
-              <Text className="text-gray-500 text-xs">{staff.role}</Text>
-            </View>
-            <Pressable onPress={onRefresh} className="p-1">
-              <Ionicons name="refresh" size={18} color="#1E40AF" />
-            </Pressable>
+        {/* Identitas staf */}
+        <View className="mb-4 flex-row items-center gap-3 rounded-lg border border-neutral-200 bg-white p-3">
+          <View
+            className="items-center justify-center rounded-full bg-primary-100"
+            style={{ width: 36, height: 36 }}
+          >
+            <ShieldCheck size={20} color={colors.primary600} strokeWidth={1.75} />
           </View>
+          <View className="flex-1">
+            <Text
+              className="font-inter-medium text-sm text-neutral-900"
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.3}
+            >
+              {staff.name}
+            </Text>
+            <Text
+              className="font-inter text-xs text-neutral-500"
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.3}
+            >
+              {staff.role}
+            </Text>
+          </View>
+          <Pressable
+            onPress={onRefresh}
+            accessibilityRole="button"
+            accessibilityLabel={teks.a11y.muatUlang}
+            hitSlop={sizes.hitSlop}
+            className="h-11 w-11 items-center justify-center"
+          >
+            <RefreshCw size={18} color={colors.primary700} strokeWidth={1.75} />
+          </Pressable>
+        </View>
 
-          {error && (
-            <View className="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
-              <Text className="text-red-700 text-sm">{error}</Text>
-            </View>
-          )}
+        {error ? (
+          <View className="mb-4">
+            <ErrorState pesan={error} onRetry={loadOrders} kompak />
+          </View>
+        ) : null}
 
-          {actionMessage && (
-            <View
-              className={`border rounded-lg p-3 mb-4 ${
-                actionMessage.tipe === "sukses"
-                  ? "bg-green-50 border-green-200"
-                  : "bg-red-50 border-red-200"
+        {actionMessage ? (
+          <View
+            className={`mb-4 rounded-md border p-3 ${
+              actionMessage.tipe === "sukses"
+                ? "border-success-100 bg-success-100"
+                : "border-danger-100 bg-danger-50"
+            }`}
+            accessibilityRole="alert"
+          >
+            <Text
+              className={`font-inter text-xs ${
+                actionMessage.tipe === "sukses" ? "text-success-700" : "text-danger-700"
               }`}
             >
-              <Text
-                className={`text-sm ${
-                  actionMessage.tipe === "sukses"
-                    ? "text-green-700"
-                    : "text-red-700"
-                }`}
+              {actionMessage.teks}
+            </Text>
+            {actionMessage.tipe === "error" ? (
+              <Pressable
+                onPress={() => Linking.openURL(onlineOrdersPageUrl()).catch(() => {})}
+                accessibilityRole="link"
+                accessibilityLabel={teks.kasir.bukaHalamanKasir}
+                className="mt-2 min-h-[44px] justify-center self-start"
               >
-                {actionMessage.teks}
-              </Text>
-              {actionMessage.tipe === "error" && (
-                <Pressable
-                  onPress={() =>
-                    Linking.openURL(onlineOrdersPageUrl()).catch(() => {})
-                  }
-                  className="mt-2 self-start px-3 py-1.5 bg-red-600 rounded-lg"
-                >
-                  <Text className="text-white text-xs font-semibold">
-                    Buka Halaman Kasir Backend
-                  </Text>
-                </Pressable>
-              )}
-            </View>
-          )}
+                <Text className="font-inter-medium text-xs text-primary-700">
+                  {teks.kasir.bukaHalamanKasir}
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
 
-          {loading && orders.length === 0 ? (
-            <View className="items-center py-10">
-              <ActivityIndicator size="large" color="#3B82F6" />
-              <Text className="text-gray-500 mt-3">Memuat order masuk...</Text>
-            </View>
-          ) : orders.length === 0 ? (
-            <View className="items-center py-12">
-              <Ionicons name="checkmark-done-circle-outline" size={64} color="#9CA3AF" />
-              <Text className="text-gray-600 font-semibold mt-4">
-                Tidak ada order menunggu
-              </Text>
-              <Text className="text-gray-400 text-sm mt-1 text-center">
-                Semua pesanan online sudah diverifikasi atau ditolak.
-              </Text>
-            </View>
-          ) : (
-            orders.map((order) => (
-              <KasirOrderCard
-                key={order.transaction.id}
-                order={order}
-                busy={busyId === order.transaction.id}
-                rejecting={rejectingId === order.transaction.id}
-                rejectReason={rejectReason}
-                onChangeRejectReason={setRejectReason}
-                onVerify={() => handleVerify(order)}
-                onStartReject={() =>
-                  setRejectingId(
-                    rejectingId === order.transaction.id
-                      ? null
-                      : order.transaction.id
-                  )
-                }
-                onConfirmReject={() => handleReject(order)}
-              />
-            ))
-          )}
-        </View>
+        {loading && orders.length === 0 ? (
+          <View>
+            {[0, 1].map((i) => (
+              <View
+                key={i}
+                className="mb-3 rounded-lg border border-neutral-200 bg-white p-4"
+              >
+                <Skeleton height={14} width="50%" />
+                <Skeleton height={12} width="35%" className="mt-2" />
+                <Skeleton height={12} width="80%" className="mt-4" />
+                <Skeleton height={40} width="100%" className="mt-4" />
+              </View>
+            ))}
+          </View>
+        ) : orders.length === 0 ? (
+          <View className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
+            <EmptyState
+              icon={<PackageCheck size={36} color={colors.primary600} strokeWidth={1.75} />}
+              title={teks.kasir.kosong.judul}
+              description={teks.kasir.kosong.deskripsi}
+            />
+          </View>
+        ) : (
+          orders.map((order) => (
+            <KasirOrderCard
+              key={order.transaction.id}
+              order={order}
+              busy={busyId === order.transaction.id}
+              rejecting={rejectingId === order.transaction.id}
+              rejectReason={rejectReason}
+              onChangeRejectReason={setRejectReason}
+              onVerify={() => handleVerify(order)}
+              onStartReject={() =>
+                setRejectingId(
+                  rejectingId === order.transaction.id ? null : order.transaction.id
+                )
+              }
+              onConfirmReject={() => handleReject(order)}
+            />
+          ))
+        )}
       </ScrollView>
     </SafeAreaView>
   );
-};
+}
 
 interface KasirOrderCardProps {
   order: KasirOrder;
@@ -449,124 +528,165 @@ const KasirOrderCard = ({
   const trx = order.transaction;
 
   return (
-    <View className="bg-white rounded-xl p-4 mb-3">
-      <View className="flex-row justify-between items-start mb-2">
-        <View className="flex-1">
-          <Text className="font-semibold text-gray-900">
-            {trx.nomor_transaksi}
-          </Text>
-          <Text className="text-gray-500 text-xs">
-            {formatDateTime(trx.tanggal_transaksi)}
-          </Text>
-          {trx.pelanggan?.nama_pelanggan && (
-            <Text className="text-gray-600 text-xs mt-1">
-              {trx.pelanggan.nama_pelanggan}
-              {trx.pelanggan.telepon ? ` • ${trx.pelanggan.telepon}` : ""}
+    <View className="mb-3 overflow-hidden rounded-lg border border-neutral-200 bg-white">
+      <View className="p-4">
+        <View className="mb-2 flex-row items-start justify-between gap-3">
+          <View className="flex-1">
+            <Text
+              className="font-inter-semibold text-sm text-neutral-900"
+              numberOfLines={1}
+              maxFontSizeMultiplier={1.3}
+            >
+              {trx.nomor_transaksi}
             </Text>
-          )}
-        </View>
-        <View className="bg-yellow-100 px-2 py-1 rounded-full">
-          <Text className="text-yellow-800 text-xs font-medium">Menunggu</Text>
-        </View>
-      </View>
-
-      {expiry.expired ? (
-        <Text className="text-red-600 text-xs mb-2">Order sudah kedaluwarsa</Text>
-      ) : expiry.countdown ? (
-        <Text className="text-orange-600 text-xs mb-2">
-          Sisa waktu bayar {expiry.countdown}
-        </Text>
-      ) : null}
-
-      <View className="border-t border-gray-100 pt-2 mb-2">
-        {order.items.length === 0 ? (
-          <Text className="text-gray-400 text-xs">Detail item tidak tersedia</Text>
-        ) : (
-          order.items.map((item) => (
-            <View key={item.id} className="flex-row justify-between py-1">
-              <Text className="text-gray-700 text-sm flex-1 pr-2" numberOfLines={1}>
-                {item.jumlah}x {item.nama_produk}
-                {item.nama_varian ? ` (${item.nama_varian})` : ""}
-              </Text>
-              <Text className="text-gray-600 text-sm">
-                {formatRupiah(Number(item.subtotal) || 0)}
-              </Text>
-            </View>
-          ))
-        )}
-      </View>
-
-      {order.alamat && (
-        <View className="bg-gray-50 rounded-lg p-2 mb-2">
-          <Text className="text-gray-500 text-xs">Kirim ke</Text>
-          <Text className="text-gray-700 text-xs">{order.alamat}</Text>
-        </View>
-      )}
-
-      {order.catatan && (
-        <View className="bg-yellow-50 rounded-lg p-2 mb-2">
-          <Text className="text-gray-500 text-xs">Catatan pelanggan</Text>
-          <Text className="text-gray-700 text-xs">{order.catatan}</Text>
-        </View>
-      )}
-
-      <View className="flex-row justify-between items-center mb-3">
-        <Text className="text-gray-500 text-sm">
-          {trx.metode_pembayaran || "Tunai"}
-        </Text>
-        <Text className="font-bold text-primary">{formatRupiah(order.total)}</Text>
-      </View>
-
-      {rejecting && (
-        <View className="mb-2">
-          <TextInput
-            value={rejectReason}
-            onChangeText={onChangeRejectReason}
-            placeholder="Alasan penolakan (opsional)"
-            className="border border-gray-300 rounded-lg px-3 py-2 bg-gray-50 mb-2"
-          />
-          <Pressable
-            onPress={onConfirmReject}
-            disabled={busy}
-            className={`py-2 rounded-lg items-center ${
-              busy ? "bg-gray-300" : "bg-red-500"
-            }`}
-          >
-            <Text className="text-white text-sm font-semibold">
-              Tolak Pesanan
+            <Text
+              className="font-inter text-xs text-neutral-500"
+              maxFontSizeMultiplier={1.3}
+            >
+              {tanggalWaktu(trx.tanggal_transaksi)}
             </Text>
-          </Pressable>
+            {trx.pelanggan?.nama_pelanggan ? (
+              <Text
+                className="mt-1 font-inter text-xs text-neutral-700"
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.3}
+              >
+                {trx.pelanggan.nama_pelanggan}
+                {trx.pelanggan.telepon ? ` · ${trx.pelanggan.telepon}` : ""}
+              </Text>
+            ) : null}
+          </View>
+          <View className="rounded-full bg-warning-100 px-2.5 py-1">
+            <Text
+              className="font-inter-medium text-xs text-warning-700"
+              maxFontSizeMultiplier={1.3}
+            >
+              {teks.kasir.menunggu}
+            </Text>
+          </View>
         </View>
-      )}
 
-      <View className="flex-row space-x-2">
-        <Pressable
-          onPress={onStartReject}
-          disabled={busy}
-          className={`flex-1 py-2 rounded-lg items-center border border-red-400 ${
-            busy ? "opacity-50" : ""
-          }`}
-        >
-          <Text className="text-red-500 text-sm font-semibold">
-            {rejecting ? "Batal Tolak" : "Tolak"}
-          </Text>
-        </Pressable>
-        <Pressable
-          onPress={onVerify}
-          disabled={busy}
-          className={`flex-1 py-2 rounded-lg items-center ${
-            busy ? "bg-gray-300" : "bg-primary"
-          }`}
-        >
-          {busy ? (
-            <ActivityIndicator size="small" color="white" />
+        {expiry.expired ? (
+          <View className="mb-2 flex-row items-center gap-1.5">
+            <XCircle size={14} color={colors.danger700} strokeWidth={1.75} />
+            <Text className="font-inter text-xs text-danger-700">
+              {teks.kasir.kedaluwarsa}
+            </Text>
+          </View>
+        ) : expiry.countdown ? (
+          <View className="mb-2 flex-row items-center gap-1.5">
+            <Clock size={14} color={colors.warning700} strokeWidth={1.75} />
+            <Text className="font-inter text-xs text-warning-700 tabular-nums">
+              {teks.kasir.sisaWaktu.replace("{waktu}", expiry.countdown)}
+            </Text>
+          </View>
+        ) : null}
+
+        <View className="mb-2 border-t border-neutral-100 pt-2">
+          {order.items.length === 0 ? (
+            <Text className="font-inter text-xs text-neutral-500">
+              {teks.kasir.itemTidakAda}
+            </Text>
           ) : (
-            <Text className="text-white text-sm font-semibold">Verifikasi</Text>
+            order.items.map((item) => (
+              <View key={item.id} className="flex-row justify-between gap-2 py-1">
+                <Text
+                  className="flex-1 font-inter text-sm text-neutral-700"
+                  numberOfLines={1}
+                  maxFontSizeMultiplier={1.3}
+                >
+                  {item.jumlah}× {item.nama_produk}
+                  {item.nama_varian ? ` (${item.nama_varian})` : ""}
+                </Text>
+                <Text
+                  className="font-inter text-sm text-neutral-700 tabular-nums"
+                  maxFontSizeMultiplier={1.3}
+                >
+                  {rupiah(Number(item.subtotal) || 0)}
+                </Text>
+              </View>
+            ))
           )}
-        </Pressable>
+        </View>
+
+        {order.alamat ? (
+          <View className="mb-2 rounded-md bg-neutral-50 p-2">
+            <Text className="font-inter text-caption text-neutral-500">
+              {teks.kasir.kirimKe}
+            </Text>
+            <Text className="font-inter text-xs text-neutral-700">{order.alamat}</Text>
+          </View>
+        ) : null}
+
+        {order.catatan ? (
+          <View className="mb-2 rounded-md bg-warning-50 p-2">
+            <Text className="font-inter text-caption text-neutral-500">
+              {teks.kasir.catatanPelanggan}
+            </Text>
+            <Text className="font-inter text-xs text-neutral-700">{order.catatan}</Text>
+          </View>
+        ) : null}
+
+        <View className="mb-3 flex-row items-center justify-between gap-2">
+          <Text
+            className="flex-1 font-inter text-xs text-neutral-500"
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.3}
+          >
+            {trx.metode_pembayaran || teks.checkout.cod}
+          </Text>
+          <Text
+            className="font-inter-bold text-base text-neutral-900 tabular-nums"
+            maxFontSizeMultiplier={1.3}
+          >
+            {rupiah(order.total)}
+          </Text>
+        </View>
+
+        {rejecting ? (
+          <View className="mb-2">
+            <TextInput
+              value={rejectReason}
+              onChangeText={onChangeRejectReason}
+              placeholder={teks.kasir.alasanPlaceholder}
+              placeholderTextColor={colors.neutral400}
+              accessibilityLabel={teks.kasir.alasanPlaceholder}
+              multiline
+              className="mb-2 rounded-md border border-neutral-200 bg-white px-3 py-2 font-inter text-sm text-neutral-900"
+              style={{ minHeight: 56 }}
+            />
+            <Button
+              title={teks.kasir.tolakPesanan}
+              variant="outline"
+              size="md"
+              fullWidth
+              loading={busy}
+              className="border-danger-500"
+              onPress={onConfirmReject}
+            />
+          </View>
+        ) : null}
+
+        <View className="flex-row gap-2">
+          <Button
+            title={rejecting ? teks.kasir.batalTolak : teks.kasir.tolak}
+            variant="outline"
+            size="md"
+            className="flex-1 border-danger-500"
+            disabled={busy}
+            icon={<XCircle size={16} color={colors.danger700} strokeWidth={1.75} />}
+            onPress={onStartReject}
+          />
+          <Button
+            title={teks.kasir.verifikasi}
+            size="md"
+            className="flex-1"
+            loading={busy}
+            icon={<CheckCheck size={16} color={colors.white} strokeWidth={1.75} />}
+            onPress={onVerify}
+          />
+        </View>
       </View>
     </View>
   );
 };
-
-export default KasirOrdersScreen;
