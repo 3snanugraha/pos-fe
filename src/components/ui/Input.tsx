@@ -63,6 +63,14 @@ export function Input({
         className={`flex-row items-center gap-2 rounded-md border px-3 ${border} ${disabledCls}`}
         style={{ height: sizes.input }}
       >
+        {/* Ring fokus 2pt primary-100 di luar border (guideline §3.2). */}
+        {fokus && !error ? (
+          <View
+            pointerEvents="none"
+            className="absolute rounded-md border-2 border-primary-100"
+            style={{ top: -3, left: -3, right: -3, bottom: -3 }}
+          />
+        ) : null}
         {icon}
         <TextInput
           ref={inputRef}

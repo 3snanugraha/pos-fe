@@ -87,8 +87,6 @@ export function Dialog({
           accessibilityLabel="Tutup dialog"
         />
         <Animated.View
-          accessibilityViewIsModal
-          accessibilityRole="alert"
           style={[
             {
               width: Math.min(width - 48, 360),
@@ -97,24 +95,35 @@ export function Dialog({
             },
             shadowStyle("modal"),
           ]}
-          className="rounded-xl bg-white p-5"
         >
-          <View className="items-center gap-2">
-            {icon ? <View className="items-center">{icon}</View> : null}
-            {title ? (
-              <Text className="text-center font-inter-semibold text-lg text-neutral-900">
-                {title}
-              </Text>
-            ) : null}
-            {description ? (
-              <Text className="text-center font-inter text-sm text-neutral-500">
-                {description}
-              </Text>
+          {/* Kelas NativeWind dipasang di View biasa: Animated.View tidak
+              meneruskan className ke gaya di react-native-web. */}
+          <View
+            accessibilityViewIsModal
+            accessibilityRole="alert"
+            className="rounded-xl bg-white p-5"
+          >
+            <View className="items-center gap-2">
+              {icon ? <View className="items-center">{icon}</View> : null}
+              {title ? (
+                <Text className="text-center font-inter-semibold text-lg text-neutral-900">
+                  {title}
+                </Text>
+              ) : null}
+              {description ? (
+                <Text className="text-center font-inter text-sm text-neutral-500">
+                  {description}
+                </Text>
+              ) : null}
+            </View>
+
+            {children ? <View className="mt-4">{children}</View> : null}
+            {actions ? (
+              <View className="mt-5 flex-row" style={{ gap: 12 }}>
+                {actions}
+              </View>
             ) : null}
           </View>
-
-          {children ? <View className="mt-4">{children}</View> : null}
-          {actions ? <View className="mt-5 flex-row" style={{ gap: 12 }}>{actions}</View> : null}
         </Animated.View>
       </View>
     </Modal>
