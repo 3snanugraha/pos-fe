@@ -114,7 +114,7 @@ export default function PaymentScreen() {
           content: (
             <View className="gap-3">
               <View className="rounded-md bg-neutral-50 p-3">
-                {(useSplit ? instruksiUntuk(metode) : instruksi).map((baris, i) => (
+                {instruksiUntuk(metode).map((baris, i) => (
                   <Text
                     key={i}
                     className="mb-1 font-inter text-xs text-neutral-700"
