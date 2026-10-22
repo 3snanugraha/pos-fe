@@ -58,6 +58,11 @@ export const login = async (
     // console.log('Login result:', result);
 
     if (result.success && result.data?.token) {
+      /**
+       * Lihat catatan di `register`: cache sesi sebelumnya harus dibuang
+       * supaya layar Akun tidak menampilkan data pelanggan lama.
+       */
+      await cacheManager.clear();
       await AsyncStorage.setItem("auth_token", result.data.token);
       if (result.data.customer) {
         await AsyncStorage.setItem(
@@ -91,6 +96,13 @@ export const register = async (data: RegisterData): Promise<LoginResponse> => {
     const result = JSON.parse(cleanedResponseText);
 
     if (result.success && result.data?.token) {
+      /**
+       * Cache AsyncStorage milik sesi sebelumnya HARUS dibersihkan sebelum
+       * token baru dipakai. Tanpa ini, masuk/daftar dengan akun lain
+       * (tanpa lewat `logout`) masih menampilkan nama, poin, dan alamat
+       * pelanggan sebelumnya di layar Akun — data bocor antar sesi.
+       */
+      await cacheManager.clear();
       await AsyncStorage.setItem("auth_token", result.data.token);
       if (result.data.customer) {
         await AsyncStorage.setItem(
