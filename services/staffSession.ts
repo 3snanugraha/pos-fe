@@ -318,7 +318,25 @@ const postWebOrderAction = async (
   url: string,
   payload: Record<string, unknown> = {}
 ): Promise<{ success: boolean; message: string }> => {
-  const token = csrfToken ?? (await refreshCsrfToken());
+  /**
+   * `refreshCsrfToken()` melakukan fetch ke rute web Laravel. Di build web
+   * lintas origin, fetch itu gagal dengan TypeError "Failed to fetch" —
+   * sebelumnya error tersebut lolos ke UI sebagai pesan mentah karena
+   * pemanggilannya di luar `try`. Bungkus di sini agar selalu diterjemahkan
+   * menjadi StaffSessionUnavailableError yang informatif.
+   */
+  let token: string;
+  try {
+    token = csrfToken ?? (await refreshCsrfToken());
+  } catch (error) {
+    if (error instanceof StaffSessionUnavailableError) throw error;
+    throw new StaffSessionUnavailableError(
+      isCrossOriginWeb()
+        ? "Backend memblokir permintaan lintas origin (CORS) untuk rute verifikasi web."
+        : "Tidak dapat menghubungi backend untuk verifikasi.",
+      isCrossOriginWeb()
+    );
+  }
   const cookieToken = csrfFromCookie();
 
   let response: Response;
