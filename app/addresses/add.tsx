@@ -1,321 +1,129 @@
-import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
 import { useState } from "react";
-import {
-  Alert,
-  Pressable,
-  ScrollView,
-  Switch,
-  Text,
-  TextInput,
-  View,
-} from "react-native";
+import { KeyboardAvoidingView, Platform } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Navbar from "../../components/Navbar";
+import { StickyBar } from "../../src/components/commerce";
+import { AppBar } from "../../src/components/layout";
+import { Button, Dialog } from "../../src/components/ui";
+import {
+  FORM_ALAMAT_KOSONG,
+  FormAlamat,
+  ScrollFormAlamat,
+  ikonSimpanAlamat,
+  validasiAlamat,
+} from "../../src/components/akun/FormAlamat";
+import { teks } from "../../src/lib/i18n";
 import { apiService } from "../../services/apiService";
-import { AddressCreateData } from "../../services/types";
+import type { AddressCreateData } from "../../services/types";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 
-const AddAddressScreen = () => {
+/**
+ * Tambah Alamat Zovora — guideline §3.2 (form) + §5.
+ *
+ * Field memakai `Input` W1 dengan validasi saat submit (pesan error per field,
+ * danger-700). Payload ke `addCustomerAddress` sama persis dengan versi lama;
+ * keberhasilan ditampilkan lewat `Dialog` lalu kembali ke daftar alamat.
+ */
+export default function AddAddressScreen() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
-  const [formData, setFormData] = useState<AddressCreateData>({
-    label: "",
-    nama_penerima: "",
-    telepon_penerima: "",
-    alamat_lengkap: "",
-    kota: "",
-    provinsi: "",
-    kode_pos: "",
-    is_default: false,
-  });
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [form, setForm] = useState<AddressCreateData>({ ...FORM_ALAMAT_KOSONG });
+  const [galat, setGalat] = useState<Record<string, string>>({});
+  const [menyimpan, setMenyimpan] = useState(false);
+  const [pesan, setPesan] = useState<{ judul: string; isi: string; sukses: boolean } | null>(
+    null
+  );
 
-  const validateForm = (): boolean => {
-    const newErrors: Record<string, string> = {};
-
-    if (!formData.label.trim()) {
-      newErrors.label = "Label alamat wajib diisi";
+  const ubah = (field: keyof AddressCreateData, value: string | boolean) => {
+    setForm((prev) => ({ ...prev, [field]: value }));
+    if (galat[field]) {
+      setGalat((prev) => {
+        const next = { ...prev };
+        delete next[field];
+        return next;
+      });
     }
-
-    if (!formData.nama_penerima.trim()) {
-      newErrors.nama_penerima = "Nama penerima wajib diisi";
-    }
-
-    if (!formData.telepon_penerima.trim()) {
-      newErrors.telepon_penerima = "Telepon penerima wajib diisi";
-    } else if (!/^[\d+\-\s()]{8,}$/.test(formData.telepon_penerima.trim())) {
-      newErrors.telepon_penerima = "Format telepon tidak valid";
-    }
-
-    if (!formData.alamat_lengkap.trim()) {
-      newErrors.alamat_lengkap = "Alamat lengkap wajib diisi";
-    }
-
-    if (!formData.kota.trim()) {
-      newErrors.kota = "Kota wajib diisi";
-    }
-
-    if (!formData.provinsi.trim()) {
-      newErrors.provinsi = "Provinsi wajib diisi";
-    }
-
-    if (!formData.kode_pos.trim()) {
-      newErrors.kode_pos = "Kode pos wajib diisi";
-    } else if (!/^\d{5}$/.test(formData.kode_pos.trim())) {
-      newErrors.kode_pos = "Kode pos harus 5 digit angka";
-    }
-
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async () => {
-    if (!validateForm()) {
-      Alert.alert("Error", "Mohon lengkapi semua field dengan benar");
+  const simpan = async () => {
+    const hasil = validasiAlamat(form);
+    setGalat(hasil);
+    if (Object.keys(hasil).length > 0) {
+      setPesan({
+        judul: teks.umum.gagal,
+        isi: teks.alamat.validasi.lengkapi,
+        sukses: false,
+      });
       return;
     }
 
-    setLoading(true);
-
+    setMenyimpan(true);
     try {
-      await apiService.addCustomerAddress(formData);
-
-      Alert.alert("Berhasil!", "Alamat berhasil ditambahkan", [
-        {
-          text: "OK",
-          onPress: () => router.back(),
-        },
-      ]);
-    } catch (error: any) {
-      console.error("Error adding address:", error);
-      const isAuthError = await handleAuthError(error);
+      await apiService.addCustomerAddress(form);
+      setPesan({
+        judul: teks.umum.berhasil,
+        isi: teks.alamat.berhasilTambah,
+        sukses: true,
+      });
+    } catch (err: any) {
+      console.error("Error adding address:", err);
+      const isAuthError = await handleAuthError(err);
       if (!isAuthError) {
-        Alert.alert("Error", getErrorMessage(error));
+        setPesan({
+          judul: teks.umum.gagal,
+          isi: getErrorMessage(err),
+          sukses: false,
+        });
       }
     } finally {
-      setLoading(false);
-    }
-  };
-
-  const updateFormData = (
-    field: keyof AddressCreateData,
-    value: string | boolean
-  ) => {
-    setFormData((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors((prev) => ({
-        ...prev,
-        [field]: "",
-      }));
+      setMenyimpan(false);
     }
   };
 
   return (
-    <SafeAreaView
-      className="flex-1 bg-background"
-      edges={["top", "left", "right"]}
-    >
-      <Navbar title="Tambah Alamat Baru" showBackButton={true} />
+    <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
+      <AppBar title={teks.alamat.tambah} onBack={() => router.back()} />
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <View className="p-4">
-          {/* Address Label */}
-          <View className="mb-4">
-            <Text className="text-gray-700 font-medium mb-2">
-              Label Alamat *
-            </Text>
-            <TextInput
-              value={formData.label}
-              onChangeText={(value) => updateFormData("label", value)}
-              placeholder="Contoh: Rumah, Kantor, Kos"
-              className={`border rounded-xl px-4 py-3 text-gray-900 ${
-                errors.label ? "border-red-500" : "border-gray-300"
-              }`}
-            />
-            {errors.label && (
-              <Text className="text-red-500 text-sm mt-1">{errors.label}</Text>
-            )}
-          </View>
+      <KeyboardAvoidingView
+        className="flex-1"
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollFormAlamat>
+          <FormAlamat nilai={form} onUbah={ubah} galat={galat} disabled={menyimpan} />
+        </ScrollFormAlamat>
 
-          {/* Recipient Name */}
-          <View className="mb-4">
-            <Text className="text-gray-700 font-medium mb-2">
-              Nama Penerima *
-            </Text>
-            <TextInput
-              value={formData.nama_penerima}
-              onChangeText={(value) => updateFormData("nama_penerima", value)}
-              placeholder="Nama lengkap penerima"
-              className={`border rounded-xl px-4 py-3 text-gray-900 ${
-                errors.nama_penerima ? "border-red-500" : "border-gray-300"
-              }`}
-            />
-            {errors.nama_penerima && (
-              <Text className="text-red-500 text-sm mt-1">
-                {errors.nama_penerima}
-              </Text>
-            )}
-          </View>
+        <StickyBar>
+          <Button
+            title={menyimpan ? teks.alamat.menyimpan : teks.alamat.simpan}
+            icon={ikonSimpanAlamat}
+            loading={menyimpan}
+            fullWidth
+            onPress={simpan}
+          />
+        </StickyBar>
+      </KeyboardAvoidingView>
 
-          {/* Recipient Phone */}
-          <View className="mb-4">
-            <Text className="text-gray-700 font-medium mb-2">
-              Telepon Penerima *
-            </Text>
-            <TextInput
-              value={formData.telepon_penerima}
-              onChangeText={(value) =>
-                updateFormData("telepon_penerima", value)
-              }
-              placeholder="Contoh: 08123456789"
-              keyboardType="phone-pad"
-              className={`border rounded-xl px-4 py-3 text-gray-900 ${
-                errors.telepon_penerima ? "border-red-500" : "border-gray-300"
-              }`}
-            />
-            {errors.telepon_penerima && (
-              <Text className="text-red-500 text-sm mt-1">
-                {errors.telepon_penerima}
-              </Text>
-            )}
-          </View>
-
-          {/* Full Address */}
-          <View className="mb-4">
-            <Text className="text-gray-700 font-medium mb-2">
-              Alamat Lengkap *
-            </Text>
-            <TextInput
-              value={formData.alamat_lengkap}
-              onChangeText={(value) => updateFormData("alamat_lengkap", value)}
-              placeholder="Nama jalan, nomor rumah, RT/RW, kelurahan, kecamatan"
-              multiline
-              numberOfLines={3}
-              textAlignVertical="top"
-              className={`border rounded-xl px-4 py-3 text-gray-900 ${
-                errors.alamat_lengkap ? "border-red-500" : "border-gray-300"
-              }`}
-            />
-            {errors.alamat_lengkap && (
-              <Text className="text-red-500 text-sm mt-1">
-                {errors.alamat_lengkap}
-              </Text>
-            )}
-          </View>
-
-          {/* City */}
-          <View className="mb-4">
-            <Text className="text-gray-700 font-medium mb-2">
-              Kota/Kabupaten *
-            </Text>
-            <TextInput
-              value={formData.kota}
-              onChangeText={(value) => updateFormData("kota", value)}
-              placeholder="Contoh: Jakarta Selatan"
-              className={`border rounded-xl px-4 py-3 text-gray-900 ${
-                errors.kota ? "border-red-500" : "border-gray-300"
-              }`}
-            />
-            {errors.kota && (
-              <Text className="text-red-500 text-sm mt-1">{errors.kota}</Text>
-            )}
-          </View>
-
-          {/* Province */}
-          <View className="mb-4">
-            <Text className="text-gray-700 font-medium mb-2">Provinsi *</Text>
-            <TextInput
-              value={formData.provinsi}
-              onChangeText={(value) => updateFormData("provinsi", value)}
-              placeholder="Contoh: DKI Jakarta"
-              className={`border rounded-xl px-4 py-3 text-gray-900 ${
-                errors.provinsi ? "border-red-500" : "border-gray-300"
-              }`}
-            />
-            {errors.provinsi && (
-              <Text className="text-red-500 text-sm mt-1">
-                {errors.provinsi}
-              </Text>
-            )}
-          </View>
-
-          {/* Postal Code */}
-          <View className="mb-4">
-            <Text className="text-gray-700 font-medium mb-2">Kode Pos *</Text>
-            <TextInput
-              value={formData.kode_pos}
-              onChangeText={(value) => updateFormData("kode_pos", value)}
-              placeholder="Contoh: 12345"
-              keyboardType="numeric"
-              maxLength={5}
-              className={`border rounded-xl px-4 py-3 text-gray-900 ${
-                errors.kode_pos ? "border-red-500" : "border-gray-300"
-              }`}
-            />
-            {errors.kode_pos && (
-              <Text className="text-red-500 text-sm mt-1">
-                {errors.kode_pos}
-              </Text>
-            )}
-          </View>
-
-          {/* Set as Default */}
-          <View className="mb-6">
-            <View className="flex-row items-center justify-between bg-gray-50 rounded-xl p-4">
-              <View className="flex-1">
-                <Text className="text-gray-900 font-medium">
-                  Jadikan Alamat Utama
-                </Text>
-                <Text className="text-gray-500 text-sm mt-1">
-                  Alamat ini akan digunakan sebagai alamat default
-                </Text>
-              </View>
-              <Switch
-                value={formData.is_default}
-                onValueChange={(value) => updateFormData("is_default", value)}
-                trackColor={{ false: "#E5E7EB", true: "#3B82F6" }}
-                thumbColor={formData.is_default ? "#FFFFFF" : "#9CA3AF"}
-              />
-            </View>
-          </View>
-
-          {/* Required fields note */}
-          <View className="mb-6">
-            <Text className="text-gray-500 text-sm">
-              * Field yang wajib diisi
-            </Text>
-          </View>
-        </View>
-      </ScrollView>
-
-      {/* Submit Button */}
-      <View className="p-4 bg-white border-t border-gray-200">
-        <Pressable
-          onPress={handleSubmit}
-          disabled={loading}
-          className={`bg-primary rounded-xl py-4 items-center ${
-            loading ? "opacity-50" : ""
-          }`}
-        >
-          <View className="flex-row items-center">
-            {loading && (
-              <View className="mr-2">
-                <Ionicons name="refresh" size={16} color="white" />
-              </View>
-            )}
-            <Text className="text-white font-semibold text-lg">
-              {loading ? "Menyimpan..." : "Simpan Alamat"}
-            </Text>
-          </View>
-        </Pressable>
-      </View>
+      <Dialog
+        visible={pesan !== null}
+        onClose={() => {
+          const sukses = pesan?.sukses;
+          setPesan(null);
+          if (sukses) router.back();
+        }}
+        title={pesan?.judul}
+        description={pesan?.isi}
+        actions={
+          <Button
+            title={teks.umum.selesai}
+            size="md"
+            className="flex-1"
+            onPress={() => {
+              const sukses = pesan?.sukses;
+              setPesan(null);
+              if (sukses) router.back();
+            }}
+          />
+        }
+      />
     </SafeAreaView>
   );
-};
-
-export default AddAddressScreen;
+}
