@@ -20,7 +20,8 @@ import { EmptyState } from "../../src/components/ui/EmptyState";
 import { Stepper } from "../../src/components/ui/Stepper";
 import { rupiah } from "../../src/lib/format";
 import { teks } from "../../src/lib/i18n";
-import { formatRating, ratingTampil, stokTampil } from "../../src/lib/produk";
+import { formatRating, stokTampil } from "../../src/lib/produk";
+import { useRingkasanProduk } from "../../src/screens/produk/useRingkasanProduk";
 import { colors, shadowStyle, sizes } from "../../src/theme/tokens";
 import { useCart } from "../../contexts/CartContext";
 import { addToWishlist, fetchProductById } from "../../services/api";
@@ -127,8 +128,14 @@ export default function ProductDetailScreen() {
   const stokEfektif = varianTerpilih?.stok ?? stokTampil(produk ?? { id: 0, nama_produk: "" });
   const stokHabis = Number(stokEfektif) <= 0;
 
-  const rating = useMemo(() => ratingTampil(produk ?? { id: 0, nama_produk: "" }), [produk]);
-  const jumlahUlasanProduk = Number(produk?.reviews_count ?? 0);
+  /**
+   * Rating & jumlah ulasan dibaca langsung dari endpoint publik lewat hook
+   * terpisah: `fetchProductById` (services/api.ts, tidak diubah pada W3) hanya
+   * meneruskan field yang dipakai keranjang sehingga rating hilang di sana.
+   */
+  const { rating, jumlahUlasan: jumlahUlasanProduk } = useRingkasanProduk(
+    idValid ? idProduk : null,
+  );
 
   /** Harga coret hanya bila backend memberi pembanding (varian termahal). */
   const hargaCoret = useMemo(() => {
