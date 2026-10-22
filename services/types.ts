@@ -103,8 +103,9 @@ export interface CustomerAddress {
   provinsi: string;
   kode_pos: string;
   is_default: boolean;
-  created_at: string;
-  updated_at: string;
+  penerima?: string; // Backend lama memakai 'penerima'
+  created_at?: string;
+  updated_at?: string;
 }
 
 export interface AddressCreateData {
@@ -137,7 +138,17 @@ export interface Product {
   varian?: ProductVariant[];
   gambar?: ProductImage[];
   
-  // Additional computed fields
+  // Additional computed fields (hasil transform ProdukController::transformProduct)
+  harga?: number;
+  harga_beli?: number;
+  stok?: number;
+  kategori_nama?: string;
+  gambar_url?: string | null;
+  has_variants?: boolean;
+  variants_count?: number;
+  harga_range?: { min: number; max: number } | null;
+  is_flash_sale?: boolean;
+  harga_flash_sale?: number | null;
   total_stok?: number;
   is_favorite?: boolean;
   rating?: number;
@@ -183,7 +194,8 @@ export interface ProductSearchParams {
   kategori_id?: number;
   min_harga?: number;
   max_harga?: number;
-  sort_by?: 'nama' | 'harga_asc' | 'harga_desc' | 'terbaru';
+  sort_by?: string;
+  sort_direction?: 'asc' | 'desc';
   per_page?: number;
   page?: number;
 }
@@ -206,9 +218,15 @@ export interface Banner {
 // Order Types
 export interface Order {
   id: number;
-  nomor_order: string;
-  tanggal_order: string;
-  status: 'pending' | 'confirmed' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
+  nomor_order?: string;
+  nomor_transaksi?: string;
+  tanggal_order?: string;
+  tanggal_transaksi?: string;
+  status: OrderStatus;
+  /** Backend mengirim status_transaksi (pending/selesai/dibatalkan/retur). */
+  status_transaksi?: string;
+  status_pembayaran?: string;
+  order_expires_at?: string | null;
   total_harga: number;
   total_diskon: number;
   biaya_pengiriman: number;
@@ -224,7 +242,8 @@ export interface Order {
   
   // Relations
   items: OrderItem[];
-  metode_pembayaran?: PaymentMethod;
+  /** List endpoint mengirim nama metode (string); detail mengirim objek. */
+  metode_pembayaran?: PaymentMethod | string | null;
   customer?: CustomerProfile;
   
   // Status tracking
@@ -240,11 +259,56 @@ export interface OrderItem {
   jumlah: number;
   harga: number;
   subtotal: number;
-  
+  gambar_url?: string | null;
+
   // Product details
   produk?: Product;
   varian?: ProductVariant;
 }
+
+/**
+ * Bentuk order dari `CustomerOrderController@show` — satu-satunya sumber
+ * `order_expires_at`, `status_pembayaran`, dan objek `metode_pembayaran`.
+ */
+export interface OrderDetail {
+  id: number;
+  nomor_transaksi: string;
+  tanggal_transaksi: string;
+  total_harga: number | string;
+  total_diskon: number | string;
+  total_bayar: number | string;
+  status: OrderStatus;
+  status_transaksi?: string;
+  status_pembayaran?: string;
+  order_expires_at?: string | null;
+  metode_pembayaran?: {
+    id: number | null;
+    nama: string;
+    jenis: string;
+    nomor_rekening?: string | null;
+    atas_nama?: string | null;
+    instruksi?: string | null;
+  };
+  alamat_pengiriman?: string | null;
+  catatan?: string | null;
+  created_at: string;
+  updated_at?: string;
+  items: OrderItem[];
+}
+
+/** Status yang benar-benar dipakai `TransaksiPenjualan` di backend. */
+export type OrderStatus =
+  | 'pending'
+  | 'selesai'
+  | 'dibatalkan'
+  | 'retur'
+  // Status lama (backend versi sebelumnya) — dipertahankan agar data lama tetap tampil
+  | 'confirmed'
+  | 'processing'
+  | 'shipped'
+  | 'delivered'
+  | 'cancelled'
+  | 'completed';
 
 export interface OrderStatusHistory {
   id: number;
@@ -271,19 +335,46 @@ export interface OrderCreateData {
 export interface PaymentMethod {
   id: number;
   nama_metode: string;
-  jenis_pembayaran: 'tunai' | 'transfer' | 'kartu' | 'ewallet' | 'cicilan';
+  jenis_pembayaran: 'tunai' | 'transfer' | 'kartu' | 'ewallet' | 'kredit' | 'cicilan';
   provider?: string;
-  nomor_rekening?: string;
-  atas_nama?: string;
+  /**
+   * Rekening tujuan transfer. Hanya dikirim endpoint staff
+   * (`GET /api/payment-methods`) — endpoint customer menyembunyikannya,
+   * jadi UI memakai fallback dari endpoint staff.
+   */
+  nomor_rekening?: string | null;
+  atas_nama?: string | null;
   biaya_admin: number;
   persentase_biaya: number;
-  minimal_transaksi: number;
-  maksimal_transaksi: number;
+  minimal_transaksi?: number;
+  maksimal_transaksi?: number;
   logo_url?: string;
-  instruksi?: string;
-  status: 'aktif' | 'nonaktif';
-  created_at: string;
-  updated_at: string;
+  /**
+   * Backend TIDAK punya kolom `instruksi`. Field ini opsional; bila kosong
+   * UI menyusun instruksi sendiri berdasarkan `jenis_pembayaran`
+   * (lihat `utils/payment.ts`).
+   */
+  instruksi?: string | null;
+  status?: 'aktif' | 'nonaktif';
+  created_at?: string;
+  updated_at?: string;
+}
+
+/**
+ * Satu baris pembayaran pada split payment (`payments[]` di
+ * `TransaksiController@store`).
+ */
+export interface PaymentSplit {
+  metode_pembayaran_id: number;
+  nama_metode: string;
+  jenis_pembayaran: PaymentMethod['jenis_pembayaran'];
+  nominal: number;
+}
+
+/** Payload pembayaran yang diterima backend (DetailPembayaran). */
+export interface PaymentPayload {
+  metode_pembayaran_id: number;
+  nominal: number;
 }
 
 // Transaction Types
@@ -291,16 +382,36 @@ export interface Transaction {
   id: number;
   nomor_transaksi: string;
   tanggal_transaksi: string;
-  jenis_transaksi: 'pembelian' | 'refund' | 'poin_reward';
+  /** `online` = order dari app, `offline` = transaksi kasir. */
+  jenis_transaksi: 'online' | 'offline' | 'pembelian' | 'refund' | 'poin_reward';
   total_harga: number;
+  /** Subtotal sebelum diskon (dipakai `transformTransaksi`). */
+  subtotal?: number;
   total_diskon: number;
   total_bayar: number;
-  status: 'pending' | 'completed' | 'failed' | 'cancelled';
+  status: 'pending' | 'completed' | 'failed' | 'cancelled' | 'selesai' | 'dibatalkan' | 'retur';
+  /** Backend mengirim status_transaksi (dibatalkan/selesai/pending) */
+  status_transaksi?: string;
+  status_pembayaran?: string;
+  order_expires_at?: string | null;
+  alamat_pengiriman?: string | null;
   metode_pembayaran: string;
+  metode_pembayaran_id?: number;
+  /** Ada bila transaksi memakai pembayaran campuran. */
+  pembayaran_campuran?: boolean;
+  jumlah_dibayar?: number;
+  kembalian?: number;
+  pelanggan_id?: number | null;
+  pelanggan?: {
+    id: number;
+    nama_pelanggan: string;
+    telepon?: string;
+  } | null;
+  items_count?: number;
   catatan?: string;
   created_at: string;
   updated_at: string;
-  
+
   // Relations
   items?: TransactionItem[];
   order?: Order;
@@ -356,9 +467,11 @@ export interface Promotion {
 }
 
 export interface PromoValidation {
-  is_valid: boolean;
+  is_valid?: boolean;
   promo?: Promotion;
-  total_diskon: number;
+  total_diskon?: number;
+  /** Backend mengirim diskon pada level atas data */
+  nilai_diskon?: number;
   message?: string;
 }
 
@@ -379,7 +492,7 @@ export interface Notification {
   id: number;
   judul: string;
   pesan: string;
-  tipe: 'order' | 'promo' | 'system' | 'info';
+  tipe: 'order' | 'promo' | 'system' | 'info' | 'payment' | 'shipping';
   is_read: boolean;
   data?: any; // Additional notification data
   tanggal_kirim: string;

@@ -33,9 +33,9 @@ export default function LoginScreen() {
     try {
       const result = await login(email, password);
       if (result.success) {
-        Alert.alert("Success", "Login berhasil!", [
-          { text: "OK", onPress: () => router.replace("/(tabs)") },
-        ]);
+        // Navigasi langsung — jangan bergantung pada callback Alert karena
+        // react-native-web tidak menjalankannya.
+        router.replace("/(tabs)");
       } else {
         Alert.alert(
           "Login Gagal",

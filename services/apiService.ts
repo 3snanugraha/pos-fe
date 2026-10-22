@@ -78,9 +78,11 @@ export class ApiService {
     
     if (params.search) queryParams.append('search', params.search);
     if (params.kategori_id) queryParams.append('kategori_id', params.kategori_id.toString());
-    if (params.min_harga) queryParams.append('min_harga', params.min_harga.toString());
-    if (params.max_harga) queryParams.append('max_harga', params.max_harga.toString());
+    // Backend membaca harga_min/harga_max (ProdukController::getProducts)
+    if (params.min_harga) queryParams.append('harga_min', params.min_harga.toString());
+    if (params.max_harga) queryParams.append('harga_max', params.max_harga.toString());
     if (params.sort_by) queryParams.append('sort_by', params.sort_by);
+    if (params.sort_direction) queryParams.append('sort_direction', params.sort_direction);
     if (params.per_page) queryParams.append('per_page', params.per_page.toString());
     if (params.page) queryParams.append('page', params.page.toString());
 
@@ -91,21 +93,21 @@ export class ApiService {
       return cacheManager.getOrSet(
         `products_${JSON.stringify(params)}`,
         async () => {
-          const response = await httpClient.get<{
-            data: Types.Product[];
-            meta: Types.PaginationMeta;
-          }>(endpoint);
-          return response.data;
+          const response = await httpClient.get<Types.Product[]>(endpoint);
+          return {
+            data: response.data ?? [],
+            meta: response.meta as Types.PaginationMeta,
+          };
         },
         CACHE_CONFIG.MEDIUM
       );
     }
 
-    const response = await httpClient.get<{
-      data: Types.Product[];
-      meta: Types.PaginationMeta;
-    }>(endpoint);
-    return response.data;
+    const response = await httpClient.get<Types.Product[]>(endpoint);
+    return {
+      data: response.data ?? [],
+      meta: response.meta as Types.PaginationMeta,
+    };
   }
 
   /**
@@ -119,7 +121,7 @@ export class ApiService {
           const response = await httpClient.get<{ data: Types.Product[] }>(
             `${API_ENDPOINTS.public.featuredProducts}?limit=${limit}`
           );
-          return response.data;
+          return response.data?.data ?? [];
         },
         CACHE_CONFIG.SHORT
       );
@@ -128,7 +130,7 @@ export class ApiService {
     const response = await httpClient.get<{ data: Types.Product[] }>(
       `${API_ENDPOINTS.public.featuredProducts}?limit=${limit}`
     );
-    return response.data;
+    return response.data?.data ?? [];
   }
 
   /**
@@ -158,7 +160,8 @@ export class ApiService {
   async login(credentials: Types.LoginCredentials): Promise<Types.AuthResponse> {
     const response = await httpClient.post<Types.AuthResponse>(
       API_ENDPOINTS.auth.login,
-      credentials
+      // Backend mewajibkan device_name (CustomerAuthController::login)
+      { ...credentials, device_name: credentials.device_name ?? "mobile-app" }
     );
     return response.data;
   }
@@ -196,19 +199,23 @@ export class ApiService {
    * Get customer profile with caching
    */
   async getCustomerProfile(useCache = true): Promise<Types.CustomerProfile> {
+    // Backend membungkus profil di data.customer (CustomerAuthController::profile)
+    const unwrap = (payload: any): Types.CustomerProfile =>
+      payload?.customer ?? payload;
+
     if (useCache) {
       return cacheManager.getOrSet(
         'customer_profile',
         async () => {
-          const response = await httpClient.get<Types.CustomerProfile>(API_ENDPOINTS.auth.profile, true);
-          return response.data;
+          const response = await httpClient.get<any>(API_ENDPOINTS.auth.profile, true);
+          return unwrap(response.data);
         },
         CACHE_CONFIG.MEDIUM
       );
     }
 
-    const response = await httpClient.get<Types.CustomerProfile>(API_ENDPOINTS.auth.profile, true);
-    return response.data;
+    const response = await httpClient.get<any>(API_ENDPOINTS.auth.profile, true);
+    return unwrap(response.data);
   }
 
   /**
@@ -310,23 +317,31 @@ export class ApiService {
   }
 
   /**
-   * Get customer orders with pagination
+   * Get customer orders with pagination.
+   * `status` harus salah satu: pending | selesai | dibatalkan | retur
+   * (backend menolak 422 untuk nilai lain).
    */
-  async getCustomerOrders(params: Types.PaginationParams = {}): Promise<{
+  async getCustomerOrders(
+    params: Types.PaginationParams & { status?: string } = {}
+  ): Promise<{
     data: Types.Order[];
     meta: Types.PaginationMeta;
   }> {
     const queryParams = new URLSearchParams();
+    if (params.status) queryParams.append('status', params.status);
     if (params.page) queryParams.append('page', params.page.toString());
     if (params.per_page) queryParams.append('per_page', params.per_page.toString());
 
     const endpoint = `${API_ENDPOINTS.customer.orders}?${queryParams.toString()}`;
-    const response = await httpClient.get<{
-      data: Types.Order[];
-      meta: Types.PaginationMeta;
-    }>(endpoint, true);
-    
-    return response.data;
+    const response = await httpClient.get<any>(endpoint, true);
+
+    // Backend membungkus list di data.data (CustomerOrderController::index)
+    const payload = response.data;
+    const rows: Types.Order[] = Array.isArray(payload) ? payload : payload?.data ?? [];
+    return {
+      data: rows,
+      meta: (response.meta ?? payload) as Types.PaginationMeta,
+    };
   }
 
   /**
@@ -381,8 +396,14 @@ export class ApiService {
       data: Types.Transaction[];
       meta: Types.PaginationMeta;
     }>(endpoint, true);
-    
-    return response.data;
+
+    // Backend mem-paginate: data adalah objek paginator berisi data[]
+    const payload: any = response.data;
+    const rows = Array.isArray(payload) ? payload : payload?.data ?? [];
+    return {
+      data: rows,
+      meta: (response.meta ?? payload) as Types.PaginationMeta,
+    };
   }
 
   /**
@@ -414,8 +435,13 @@ export class ApiService {
       data: Types.PointHistory[];
       meta: Types.PaginationMeta;
     }>(endpoint, true);
-    
-    return response.data;
+
+    const payload: any = response.data;
+    const rows = Array.isArray(payload) ? payload : payload?.data ?? [];
+    return {
+      data: rows,
+      meta: (response.meta ?? payload) as Types.PaginationMeta,
+    };
   }
 
   // ===== WISHLIST METHODS =====
@@ -436,8 +462,14 @@ export class ApiService {
       data: Types.WishlistItem[];
       meta: Types.PaginationMeta;
     }>(endpoint, true);
-    
-    return response.data;
+
+    // Backend wishlist mengembalikan array produk langsung di data
+    const payload: any = response.data;
+    const rows = Array.isArray(payload) ? payload : payload?.data ?? [];
+    return {
+      data: rows,
+      meta: (response.meta ?? payload) as Types.PaginationMeta,
+    };
   }
 
   /**
@@ -487,28 +519,55 @@ export class ApiService {
   // ===== PAYMENT METHODS =====
 
   /**
-   * Get available payment methods with caching
+   * Get available payment methods with caching.
+   *
+   * Endpoint customer menyembunyikan `nomor_rekening`/`atas_nama`, padahal
+   * pelanggan butuh tujuan transfer. Kita gabungkan dengan
+   * `GET /api/payment-methods` (route staff, tetap menerima token pelanggan
+   * karena hanya memakai `auth:sanctum`) untuk melengkapi data rekening.
    */
   async getPaymentMethods(useCache = true): Promise<Types.PaymentMethod[]> {
+    const fetchCustomer = async (): Promise<Types.PaymentMethod[]> => {
+      const response = await httpClient.get<Types.PaymentMethod[]>(
+        API_ENDPOINTS.customer.paymentMethods,
+        true
+      );
+      return response.data ?? [];
+    };
+
+    const fetchWithAccountInfo = async (): Promise<Types.PaymentMethod[]> => {
+      const [customerMethods, fullMethods] = await Promise.all([
+        fetchCustomer(),
+        // Kegagalan di sini tidak boleh mematikan checkout — data rekening
+        // hanya pelengkap.
+        httpClient
+          .get<Types.PaymentMethod[]>(API_ENDPOINTS.kasir.paymentMethods, true)
+          .then((r) => r.data ?? [])
+          .catch(() => [] as Types.PaymentMethod[]),
+      ]);
+
+      const byId = new Map(fullMethods.map((m) => [m.id, m]));
+
+      return customerMethods.map((method) => {
+        const full = byId.get(method.id);
+        return {
+          ...method,
+          nomor_rekening: method.nomor_rekening ?? full?.nomor_rekening ?? null,
+          atas_nama: method.atas_nama ?? full?.atas_nama ?? null,
+          status: method.status ?? full?.status,
+        };
+      });
+    };
+
     if (useCache) {
       return cacheManager.getOrSet(
-        'payment_methods',
-        async () => {
-          const response = await httpClient.get<Types.PaymentMethod[]>(
-            API_ENDPOINTS.customer.paymentMethods,
-            true
-          );
-          return response.data;
-        },
+        "payment_methods",
+        fetchWithAccountInfo,
         CACHE_CONFIG.LONG
       );
     }
 
-    const response = await httpClient.get<Types.PaymentMethod[]>(
-      API_ENDPOINTS.customer.paymentMethods,
-      true
-    );
-    return response.data;
+    return fetchWithAccountInfo();
   }
 
   // ===== NOTIFICATION METHODS =====
@@ -529,8 +588,13 @@ export class ApiService {
       data: Types.Notification[];
       meta: Types.PaginationMeta;
     }>(endpoint, true);
-    
-    return response.data;
+
+    const payload: any = response.data;
+    const rows = Array.isArray(payload) ? payload : payload?.data ?? [];
+    return {
+      data: rows,
+      meta: (response.meta ?? payload) as Types.PaginationMeta,
+    };
   }
 
   /**

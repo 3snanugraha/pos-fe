@@ -5,7 +5,13 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { CartProvider } from "../contexts/CartContext";
+import installWebAlert from "../utils/webAlert";
 import "../global.css";
+
+// react-native-web tidak mengimplementasikan Alert (callback tombol tidak
+// pernah dipanggil). Shim ini mengembalikan perilaku dialog di web.
+installWebAlert();
+
 // Prevent the splash screen from auto-hiding
 SplashScreen.preventAutoHideAsync();
 
@@ -28,7 +34,7 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <CartProvider>
-        <StatusBar style="dark" backgroundColor="#F3F4F6" translucent={false} />
+        <StatusBar style="dark" />
         <Stack
           screenOptions={{
             headerShown: false,
