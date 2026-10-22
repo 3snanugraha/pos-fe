@@ -1,20 +1,30 @@
-import { Ionicons } from "@expo/vector-icons";
+import { Check, Info } from "lucide-react-native";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import Navbar from "../../components/Navbar";
+import { StickyBar } from "../../src/components/commerce";
+import { AppBar } from "../../src/components/layout";
+import { Button } from "../../src/components/ui";
+import { rupiah } from "../../src/lib/format";
+import { teks } from "../../src/lib/i18n";
+import { colors, sizes } from "../../src/theme/tokens";
 import { apiService } from "../../services/apiService";
-import { OrderDetail } from "../../services/types";
-import { useOrderExpiry, formatDateTime } from "../../utils/orderExpiry";
-import {
-  buildPaymentInstruction,
-  formatRupiah,
-  isTransfer,
-  jenisLabel,
-} from "../../utils/payment";
+import type { OrderDetail } from "../../services/types";
+import { formatDateTime, useOrderExpiry } from "../../utils/orderExpiry";
+import { buildPaymentInstruction, isTransfer, jenisLabel } from "../../utils/payment";
 
-const CheckoutSuccessScreen = () => {
+/**
+ * Pesanan Berhasil Zovora — layar baru (belum ada di kit).
+ *
+ * Ikon centang di lingkaran success, nomor pesanan, ringkasan (total, poin),
+ * batas waktu pembayaran, instruksi pembayaran, dan dua aksi: "Lacak Pesanan"
+ * (primary) + "Kembali ke Beranda".
+ *
+ * Angka final tetap diambil dari respons server (`total_bayar`,
+ * `poin_digunakan`) seperti versi sebelumnya — param URL hanya cadangan.
+ */
+export default function CheckoutSuccessScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     orderNumber?: string;
@@ -30,12 +40,9 @@ const CheckoutSuccessScreen = () => {
   const poinParam = Number(params.poin ?? 0) || 0;
 
   /**
-   * Nilai final diambil dari data order bila sudah termuat.
-   *
-   * Param URL berasal dari perhitungan lokal checkout dan bisa berbeda dengan
-   * angka server — mis. saat server menolak pemakaian poin sehingga order
-   * tersimpan tanpa potongan poin. Menampilkan angka param saja membuat
-   * pelanggan melihat total yang salah.
+   * Nilai final diambil dari data order bila sudah termuat. Param URL berasal
+   * dari perhitungan lokal dan bisa berbeda dengan angka server (mis. saat
+   * server menolak pemakaian poin).
    */
   const total = Number((order as any)?.total_bayar) || totalParam;
   const poinDipakai = Number((order as any)?.poin_digunakan) || poinParam;
@@ -70,170 +77,183 @@ const CheckoutSuccessScreen = () => {
       })
     : [];
 
-  return (
-    <SafeAreaView className="flex-1 bg-background" edges={["top", "left", "right"]}>
-      <Navbar title="Pesanan Berhasil" showBackButton={false} />
+  const lacak = () => {
+    if (orderId) router.replace(`/orders/${orderId}` as any);
+    else router.replace("/orders");
+  };
 
-      <ScrollView contentContainerStyle={{ paddingBottom: 32 }}>
-        <View className="px-6 pt-6">
-          <View className="items-center mb-5">
-            <View className="w-20 h-20 bg-green-100 rounded-full items-center justify-center mb-4">
-              <Ionicons name="checkmark" size={42} color="#10B981" />
+  return (
+    <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
+      <AppBar title={teks.judul.orders} showBack={false} />
+
+      <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
+        <View className="px-4 pt-6">
+          <View className="items-center">
+            <View
+              className="items-center justify-center rounded-full bg-success-100"
+              style={{ width: 80, height: 80 }}
+              accessibilityElementsHidden
+            >
+              <Check size={40} color={colors.success700} strokeWidth={2.25} />
             </View>
-            <Text className="text-2xl font-bold text-gray-900 text-center">
-              Pesanan Berhasil Dibuat!
+            <Text
+              className="mt-4 text-center font-inter-bold text-2xl text-neutral-900"
+              accessibilityRole="header"
+              maxFontSizeMultiplier={1.3}
+            >
+              {teks.sukses.judul}
             </Text>
-            <Text className="text-gray-600 text-center mt-2 leading-relaxed">
-              Pesanan menunggu verifikasi kasir. Selesaikan pembayaran sesuai
-              instruksi di bawah agar pesanan segera diproses.
+            <Text
+              className="mt-2 text-center font-inter text-sm text-neutral-500"
+              style={{ maxWidth: 280 }}
+              maxFontSizeMultiplier={1.3}
+            >
+              {teks.sukses.deskripsi}
             </Text>
           </View>
 
-          {/* Countdown */}
-          {order?.order_expires_at && order?.status === "pending" && (
+          <View className="mt-6 rounded-lg border border-neutral-200 bg-white p-4">
+            {params.orderNumber ? (
+              <View className="mb-3 flex-row items-center justify-between gap-3">
+                <Text className="font-inter text-sm text-neutral-500">
+                  {teks.sukses.nomorPesanan}
+                </Text>
+                <Text
+                  className="flex-1 text-right font-inter-semibold text-sm text-neutral-900 tabular-nums"
+                  numberOfLines={1}
+                  maxFontSizeMultiplier={1.3}
+                >
+                  {params.orderNumber}
+                </Text>
+              </View>
+            ) : null}
+
+            {total > 0 ? (
+              <View className="mb-3 flex-row items-center justify-between gap-3">
+                <Text className="font-inter text-sm text-neutral-500">
+                  {teks.sukses.totalBayar}
+                </Text>
+                <Text
+                  className="font-inter-semibold text-base text-neutral-900 tabular-nums"
+                  maxFontSizeMultiplier={1.3}
+                >
+                  {rupiah(total)}
+                </Text>
+              </View>
+            ) : null}
+
+            {poinDipakai > 0 ? (
+              <View className="flex-row items-center justify-between gap-3">
+                <Text className="font-inter text-sm text-neutral-500">
+                  {teks.sukses.poinDigunakan}
+                </Text>
+                <Text className="font-inter-semibold text-sm text-success-700 tabular-nums">
+                  {poinDipakai.toLocaleString("id-ID")} poin
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          {order?.order_expires_at && order?.status === "pending" ? (
             <View
-              className={`rounded-xl p-4 mb-4 ${
+              className={`mt-4 rounded-lg border p-4 ${
                 expiry.expired
-                  ? "bg-red-50 border border-red-200"
-                  : "bg-orange-50 border border-orange-200"
+                  ? "border-danger-500 bg-danger-50"
+                  : "border-warning-500 bg-warning-50"
               }`}
             >
               <Text
-                className={`text-xs ${
-                  expiry.expired ? "text-red-700" : "text-orange-700"
+                className={`font-inter text-xs ${
+                  expiry.expired ? "text-danger-700" : "text-warning-700"
                 }`}
               >
-                {expiry.expired ? "Pesanan kedaluwarsa" : "Batas waktu pembayaran"}
+                {expiry.expired ? teks.sukses.kedaluwarsa : teks.sukses.batasWaktu}
               </Text>
               <Text
-                className={`text-2xl font-bold ${
-                  expiry.expired ? "text-red-800" : "text-orange-900"
+                className={`mt-1 font-inter-bold text-xl tabular-nums ${
+                  expiry.expired ? "text-danger-700" : "text-neutral-900"
                 }`}
               >
                 {expiry.expired ? "—" : expiry.countdown}
               </Text>
-              <Text
-                className={`text-xs mt-1 ${
-                  expiry.expired ? "text-red-600" : "text-orange-600"
-                }`}
-              >
-                s.d. {formatDateTime(order.order_expires_at)}
+              <Text className="mt-1 font-inter text-caption text-neutral-500">
+                {teks.sukses.sampaiDengan.replace(
+                  "{waktu}",
+                  formatDateTime(order.order_expires_at)
+                )}
               </Text>
             </View>
-          )}
+          ) : null}
 
-          {/* Rincian */}
-          <View className="bg-white rounded-xl p-4 mb-4">
-            <Text className="font-semibold text-gray-900 mb-3">Detail Pesanan</Text>
-
-            {params.orderNumber && (
-              <View className="flex-row justify-between items-center mb-2">
-                <Text className="text-gray-600">Nomor Pesanan</Text>
-                <Text className="font-medium text-gray-900">
-                  {params.orderNumber}
-                </Text>
-              </View>
-            )}
-
-            {total > 0 && (
-              <View className="flex-row justify-between items-center mb-2">
-                <Text className="text-gray-600">Total Bayar</Text>
-                <Text className="font-medium text-primary">{formatRupiah(total)}</Text>
-              </View>
-            )}
-
-            {poinDipakai > 0 && (
-              <View className="flex-row justify-between items-center">
-                <Text className="text-gray-600">Poin digunakan</Text>
-                <Text className="font-medium text-green-600">
-                  {poinDipakai.toLocaleString("id-ID")} poin
-                </Text>
-              </View>
-            )}
-          </View>
-
-          {/* Instruksi pembayaran */}
-          {instruksi.length > 0 && (
-            <View className="bg-white rounded-xl p-4 mb-4">
-              <View className="flex-row items-center mb-2">
-                <Ionicons name="wallet-outline" size={18} color="#1D4ED8" />
-                <Text className="font-semibold text-gray-900 ml-2">
-                  Instruksi Pembayaran
-                </Text>
-              </View>
-              <Text className="text-gray-500 text-xs mb-2">
-                {metode?.nama} • {jenisLabel(metode?.jenis)}
+          {instruksi.length > 0 ? (
+            <View className="mt-4 rounded-lg border border-neutral-200 bg-white p-4">
+              <Text className="font-inter-semibold text-base text-neutral-900">
+                {teks.checkout.instruksiPembayaran}
               </Text>
-              <View className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                {instruksi.map((line, idx) => (
-                  <Text key={idx} className="text-blue-800 text-sm leading-5 mb-1">
-                    • {line}
+              <Text className="mt-1 font-inter text-xs text-neutral-500">
+                {metode?.nama} · {jenisLabel(metode?.jenis)}
+              </Text>
+              <View className="mt-3 rounded-md bg-neutral-50 p-3">
+                {instruksi.map((baris, i) => (
+                  <Text
+                    key={i}
+                    className="mb-1 font-inter text-xs text-neutral-700"
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    • {baris}
                   </Text>
                 ))}
               </View>
-              {isTransfer(metode?.jenis) && metode?.nomor_rekening && (
-                <View className="bg-gray-50 rounded-lg p-3 mt-2">
-                  <Text className="text-xs text-gray-500">Nomor Rekening</Text>
-                  <Text className="text-lg font-bold text-gray-900">
+
+              {isTransfer(metode?.jenis) && metode?.nomor_rekening ? (
+                <View className="mt-2 rounded-md border border-primary-100 bg-primary-50 p-3">
+                  <Text className="font-inter text-caption text-neutral-500">
+                    {teks.checkout.nomorRekening}
+                  </Text>
+                  <Text className="font-inter-bold text-base text-neutral-900 tabular-nums">
                     {metode.nomor_rekening}
                   </Text>
-                  <Text className="text-xs text-gray-500 mt-1">
-                    Atas Nama: {metode.atas_nama ?? "-"}
+                  <Text className="mt-0.5 font-inter text-caption text-neutral-500">
+                    {teks.checkout.atasNama}: {metode.atas_nama ?? "-"}
                   </Text>
                 </View>
-              )}
+              ) : null}
             </View>
-          )}
+          ) : null}
 
-          {/* Aksi */}
-          <View className="space-y-3">
-            <Pressable
-              onPress={() =>
-                orderId
-                  ? router.replace(`/orders/${orderId}` as any)
-                  : router.replace("/orders")
-              }
-              className="bg-primary py-3 rounded-xl items-center"
-            >
-              <Text className="text-white font-semibold">Lihat Detail Pesanan</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.replace("/orders")}
-              className="bg-gray-100 py-3 rounded-xl items-center"
-            >
-              <Text className="text-gray-700 font-semibold">Riwayat Pesanan</Text>
-            </Pressable>
-
-            <Pressable
-              onPress={() => router.replace("/(tabs)/products")}
-              className="py-3 rounded-xl items-center"
-            >
-              <Text className="text-primary font-semibold">Lanjut Belanja</Text>
-            </Pressable>
-          </View>
-
-          <View className="mt-6 p-4 bg-blue-50 rounded-xl">
-            <View className="flex-row items-start">
-              <Ionicons
-                name="information-circle"
-                size={20}
-                color="#3B82F6"
-                style={{ marginRight: 8, marginTop: 2 }}
-              />
-              <View className="flex-1">
-                <Text className="text-blue-800 font-medium mb-1">Status Pesanan</Text>
-                <Text className="text-blue-700 text-sm leading-relaxed">
-                  Pantau status di Riwayat Pesanan. Status berubah otomatis setelah
-                  kasir memverifikasi (diproses/selesai) atau menolak pesanan.
-                </Text>
-              </View>
+          <View className="mt-4 flex-row items-start gap-2 rounded-lg bg-primary-50 p-4">
+            <Info size={20} color={colors.primary600} strokeWidth={1.75} />
+            <View className="flex-1">
+              <Text className="font-inter-semibold text-sm text-neutral-900">
+                {teks.sukses.statusJudul}
+              </Text>
+              <Text className="mt-1 font-inter text-xs text-neutral-700">
+                {teks.sukses.statusDeskripsi}
+              </Text>
             </View>
           </View>
         </View>
       </ScrollView>
+
+      <StickyBar>
+        <Pressable
+          onPress={() => router.replace("/(tabs)")}
+          accessibilityRole="button"
+          accessibilityLabel={teks.sukses.kembaliBeranda}
+          hitSlop={sizes.hitSlop}
+          className="min-h-[44px] flex-1 items-start justify-center"
+        >
+          <Text className="font-inter-medium text-sm text-primary-700">
+            {teks.sukses.kembaliBeranda}
+          </Text>
+        </Pressable>
+        <Button
+          title={teks.sukses.lacakPesanan}
+          size="lg"
+          className="w-[160px]"
+          onPress={lacak}
+        />
+      </StickyBar>
     </SafeAreaView>
   );
-};
-
-export default CheckoutSuccessScreen;
+}
