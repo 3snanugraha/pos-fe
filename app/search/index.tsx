@@ -16,6 +16,15 @@ import { apiService } from "../../services/apiService";
 import { Product, ProductCategory } from "../../services/types";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 
+/** Override filter untuk satu kali pemanggilan (menghindari state basi). */
+interface SearchParams {
+  query?: string;
+  kategoriId?: number | null;
+  sortBy?: string;
+  sortDirection?: "asc" | "desc";
+  priceRange?: { min: string; max: string };
+}
+
 const SearchScreen = () => {
   const router = useRouter();
   const params = useLocalSearchParams();
@@ -72,15 +81,25 @@ const SearchScreen = () => {
   };
 
   const searchProducts = React.useCallback(
-    async (query: string = searchQuery) => {
+    async (overrides: Partial<SearchParams> = {}) => {
       setLoading(true);
       setError(null);
 
       try {
+        // PENTING: nilai filter diambil dari `overrides` lebih dulu.
+        // Sebelumnya handler memanggil `setSelectedCategory(x)` lalu
+        // `searchProducts()` — callback memoized masih memegang state LAMA,
+        // sehingga filter kategori/sorting tidak pernah benar-benar diterapkan.
+        const query = overrides.query ?? searchQuery;
+        const kategori = overrides.kategoriId ?? selectedCategory;
+        const urut = overrides.sortBy ?? sortBy;
+        const arah = overrides.sortDirection ?? sortDirection;
+        const harga = overrides.priceRange ?? priceRange;
+
         const params: any = {
           per_page: 50,
-          sort_by: sortBy,
-          sort_direction: sortDirection,
+          sort_by: urut,
+          sort_direction: arah,
         };
 
         if (query.trim()) {
@@ -88,20 +107,37 @@ const SearchScreen = () => {
           addToSearchHistory(query.trim());
         }
 
-        if (selectedCategory) {
-          params.kategori_id = selectedCategory;
+        if (kategori) {
+          params.kategori_id = kategori;
         }
 
         // Rentang harga: backend memakai harga_min/harga_max
-        if (priceRange.min) {
-          params.min_harga = parseInt(priceRange.min, 10);
+        const hargaMin = parseInt(harga.min, 10);
+        const hargaMax = parseInt(harga.max, 10);
+        if (!Number.isNaN(hargaMin)) {
+          params.min_harga = hargaMin;
         }
-        if (priceRange.max) {
-          params.max_harga = parseInt(priceRange.max, 10);
+        if (!Number.isNaN(hargaMax)) {
+          params.max_harga = hargaMax;
         }
 
         const result = await apiService.searchProducts(params);
-        setProducts(result.data);
+
+        /**
+         * Backend mengabaikan `harga_min`/`harga_max` pada rute publik
+         * (`/public/products` memanggil `getProducts($request, false)`, dan
+         * filter harga hanya dijalankan bila `$isPublic === true`).
+         * Tanpa fallback ini, filter harga tampak "tidak berefek".
+         */
+        const produk = result.data ?? [];
+        const tersaring = produk.filter((item) => {
+          const hargaProduk = Number(item.harga) || 0;
+          if (!Number.isNaN(hargaMin) && hargaProduk < hargaMin) return false;
+          if (!Number.isNaN(hargaMax) && hargaProduk > hargaMax) return false;
+          return true;
+        });
+
+        setProducts(tersaring);
       } catch (error: any) {
         console.error("Error searching products:", error);
         const isAuthError = await handleAuthError(error);
@@ -116,7 +152,7 @@ const SearchScreen = () => {
   );
 
   const handleSearch = () => {
-    searchProducts(searchQuery);
+    searchProducts({ query: searchQuery });
   };
 
   const handleProductPress = (product: Product) => {
@@ -125,32 +161,38 @@ const SearchScreen = () => {
 
   const handleCategoryFilter = (categoryId: number | null) => {
     setSelectedCategory(categoryId);
-    setTimeout(() => searchProducts(), 100);
+    searchProducts({ kategoriId: categoryId });
   };
 
   const handleSortChange = (sortKey: string, direction: "asc" | "desc") => {
     setSortBy(sortKey);
     setSortDirection(direction);
-    setTimeout(() => searchProducts(), 100);
+    searchProducts({ sortBy: sortKey, sortDirection: direction });
   };
 
   const clearFilters = () => {
+    const kosong = { min: "", max: "" };
     setSelectedCategory(null);
     setSortBy("nama_produk");
     setSortDirection("asc");
-    setPriceRange({ min: "", max: "" });
-    setTimeout(() => searchProducts(), 100);
+    setPriceRange(kosong);
+    searchProducts({
+      kategoriId: null,
+      sortBy: "nama_produk",
+      sortDirection: "asc",
+      priceRange: kosong,
+    });
   };
 
   const handleHistorySearch = (query: string) => {
     setSearchQuery(query);
-    searchProducts(query);
+    searchProducts({ query });
   };
 
   useEffect(() => {
     loadCategories();
     if (initialQuery) {
-      searchProducts(initialQuery);
+      searchProducts({ query: initialQuery });
     }
   }, []);
 
