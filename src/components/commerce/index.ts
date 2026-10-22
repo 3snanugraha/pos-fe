@@ -18,3 +18,5 @@ export {
   SkeletonGridProduk,
   type SkeletonProps,
 } from "./Skeleton";
+export { ProductGallery, type GambarProduk, type ProductGalleryProps } from "./ProductGallery";
+export { SearchBar, type SearchBarProps } from "./SearchBar";
