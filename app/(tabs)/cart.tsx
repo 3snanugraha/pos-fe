@@ -1,217 +1,236 @@
-import React from 'react';
-import { View, Text, ScrollView, Pressable, Image, Alert } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
-import Navbar from '../../components/Navbar';
-import { useCart, CartItem } from '../../contexts/CartContext';
+import { ShoppingBasket } from "lucide-react-native";
+import { useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
+import { RefreshControl, ScrollView, View } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import {
+  AddressCard,
+  CartItemRow,
+  PriceSummary,
+  Skeleton,
+  StickyBar,
+  StickyTotal,
+} from "../../src/components/commerce";
+import { AppBar } from "../../src/components/layout";
+import { Button, EmptyState } from "../../src/components/ui";
+import { rupiah } from "../../src/lib/format";
+import { teks } from "../../src/lib/i18n";
+import { colors } from "../../src/theme/tokens";
+import { CartItem, useCart } from "../../contexts/CartContext";
+import { apiService } from "../../services/apiService";
+import type { CustomerAddress } from "../../services/types";
+import { getErrorMessage, handleAuthError } from "../../utils/auth";
 
-const CartScreen = () => {
+/**
+ * Keranjang Zovora — guideline §3.11–§3.13 + §5.
+ *
+ * Susunan: alamat pengiriman ringkas (ikon map-pin 16 + link "Ganti") →
+ * daftar item (thumbnail 72×80, stepper, trash) → ringkasan harga (kartu
+ * primary-50) → sticky bar (total Heading + CTA "Lanjutkan" ±140).
+ *
+ * Logika keranjang sepenuhnya dari `CartContext` (tidak diubah): jumlah,
+ * batas stok, dan alur ke `/checkout/summary` tetap sama.
+ */
+export default function CartScreen() {
   const router = useRouter();
-  const { items, itemCount, totalAmount, removeItem, updateItemQuantity, clearCart } = useCart();
+  const {
+    items,
+    itemCount,
+    totalAmount,
+    removeItem,
+    updateItemQuantity,
+    isLoading: memuatKeranjang,
+  } = useCart();
 
-  const formatPrice = (price: number) => {
-    return new Intl.NumberFormat('id-ID', {
-      style: 'currency',
-      currency: 'IDR',
-      minimumFractionDigits: 0,
-    }).format(price);
-  };
+  const [alamat, setAlamat] = useState<CustomerAddress | null>(null);
+  const [memuatAlamat, setMemuatAlamat] = useState(true);
+  const [galatAlamat, setGalatAlamat] = useState<string | null>(null);
+  const [menyegarkan, setMenyegarkan] = useState(false);
 
-  const handleQuantityChange = async (item: CartItem, newQuantity: number) => {
+  const ambilAlamat = async () => {
     try {
-      await updateItemQuantity(item.id, newQuantity);
-    } catch (error: any) {
-      Alert.alert('Error', error.message);
+      const daftar = await apiService.getCustomerAddresses();
+      return { utama: daftar.find((a) => a.is_default) ?? daftar[0] ?? null, galat: null };
+    } catch (err: any) {
+      const auth = await handleAuthError(err);
+      return { utama: null, galat: auth ? null : getErrorMessage(err) };
     }
   };
 
-  const handleRemoveItem = async (item: CartItem) => {
-    Alert.alert(
-      'Hapus Item',
-      `Apakah Anda yakin ingin menghapus ${item.nama_produk} dari keranjang?`,
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Hapus',
-          style: 'destructive',
-          onPress: () => removeItem(item.id),
-        },
-      ]
-    );
+  // Muat sekali saat layar dibuka; state hanya diubah di dalam callback async
+  // (pola yang sama dengan beranda W3 — menghindari setState sinkron di effect).
+  useEffect(() => {
+    let aktif = true;
+    (async () => {
+      const hasil = await ambilAlamat();
+      if (!aktif) return;
+      setAlamat(hasil.utama);
+      setGalatAlamat(hasil.galat);
+      setMemuatAlamat(false);
+    })();
+    return () => {
+      aktif = false;
+    };
+  }, []);
+
+  const muatUlangAlamat = async () => {
+    const hasil = await ambilAlamat();
+    setAlamat(hasil.utama);
+    setGalatAlamat(hasil.galat);
+    setMemuatAlamat(false);
   };
 
-  const handleClearCart = () => {
-    Alert.alert(
-      'Kosongkan Keranjang',
-      'Apakah Anda yakin ingin mengosongkan keranjang belanja?',
-      [
-        { text: 'Batal', style: 'cancel' },
-        {
-          text: 'Kosongkan',
-          style: 'destructive',
-          onPress: clearCart,
-        },
-      ]
-    );
+  const onRefresh = async () => {
+    setMenyegarkan(true);
+    await muatUlangAlamat();
+    setMenyegarkan(false);
   };
 
-  const handleCheckout = () => {
-    if (items.length === 0) {
-      Alert.alert('Keranjang Kosong', 'Tambahkan produk ke keranjang terlebih dahulu');
-      return;
-    }
-    router.push('/checkout');
+  const ubahJumlah = async (item: CartItem, next: number) => {
+    // `updateItemQuantity` sudah membatasi ke stok; nilai <= 0 menghapus baris.
+    await updateItemQuantity(item.id, next);
   };
 
-  if (items.length === 0) {
-    return (
-      <SafeAreaView className="flex-1 bg-background" edges={['top', 'left', 'right']}>
-        <Navbar title="Keranjang" showLogo={true} />
-        <View className="flex-1 justify-center items-center px-4">
-          <Ionicons name="cart-outline" size={80} color="#9CA3AF" />
-          <Text className="text-xl font-semibold text-gray-600 mt-4 mb-2">
-            Keranjang Kosong
-          </Text>
-          <Text className="text-gray-500 text-center mb-6">
-            Belum ada produk yang ditambahkan ke keranjang
-          </Text>
-          <Pressable
-            onPress={() => router.push('/(tabs)/products')}
-            className="bg-primary px-6 py-3 rounded-xl"
-          >
-            <Text className="text-white font-semibold">Mulai Belanja</Text>
-          </Pressable>
-        </View>
-      </SafeAreaView>
-    );
-  }
+  const ringkasan = useMemo(
+    () => [
+      { label: teks.checkout.subTotal, nilai: totalAmount },
+      // Backend belum menghitung ongkir pada tahap ini — ditampilkan apa
+      // adanya sebagai "Gratis" agar struktur ringkasan sesuai guideline.
+      { label: teks.checkout.ongkosKirim, nilai: 0, teksNilai: teks.checkout.ongkirGratis },
+    ],
+    [totalAmount]
+  );
+
+  const keCheckout = () => {
+    if (items.length === 0) return;
+    router.push("/checkout/summary");
+  };
+
+  const memuat = memuatKeranjang && items.length === 0;
 
   return (
-    <SafeAreaView className="flex-1 bg-background" edges={['top', 'left', 'right']}>
-      <Navbar 
-        title={`Keranjang (${itemCount})`}
-        showLogo={true}
-        rightAction={
-          <Pressable onPress={handleClearCart}>
-            <Ionicons name="trash-outline" size={24} color="white" />
-          </Pressable>
-        }
-      />
+    <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
+      <AppBar title={teks.judul.cart} showBack={false} />
 
-      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
-        <View className="p-4">
-          {items.map((item) => (
-            <View key={item.id} className="bg-white rounded-xl p-4 mb-3 shadow-sm">
-              <View className="flex-row">
-                {/* Product Image */}
-                <View className="w-20 h-20 bg-gray-200 rounded-lg mr-3 overflow-hidden">
-                  <Image
-                    source={{
-                      uri: item.gambar_url || 'https://via.placeholder.com/80x80/E5E7EB/9CA3AF?text=No+Image'
-                    }}
-                    style={{ width: '100%', height: '100%' }}
-                    resizeMode="cover"
-                  />
-                </View>
-
-                {/* Product Info */}
-                <View className="flex-1">
-                  <Text className="font-semibold text-gray-900 mb-1" numberOfLines={2}>
-                    {item.nama_produk}
-                  </Text>
-                  
-                  {item.varian_nama && (
-                    <Text className="text-sm text-gray-500 mb-1">
-                      Varian: {item.varian_nama}
-                    </Text>
-                  )}
-                  
-                  <Text className="text-sm text-gray-500 mb-2">
-                    {item.kategori_nama}
-                  </Text>
-                  
-                  <Text className="text-lg font-bold text-primary mb-2">
-                    {formatPrice(item.harga)}
-                  </Text>
-
-                  {/* Quantity Controls */}
-                  <View className="flex-row items-center justify-between">
-                    <View className="flex-row items-center">
-                      <Pressable
-                        onPress={() => handleQuantityChange(item, item.quantity - 1)}
-                        className="w-8 h-8 bg-gray-200 rounded-full items-center justify-center"
-                      >
-                        <Ionicons name="remove" size={16} color="#374151" />
-                      </Pressable>
-                      
-                      <Text className="mx-3 text-lg font-semibold min-w-[30px] text-center">
-                        {item.quantity}
-                      </Text>
-                      
-                      <Pressable
-                        onPress={() => handleQuantityChange(item, item.quantity + 1)}
-                        className={`w-8 h-8 rounded-full items-center justify-center ${
-                          item.quantity >= item.stok_tersedia ? 'bg-gray-200' : 'bg-primary'
-                        }`}
-                        disabled={item.quantity >= item.stok_tersedia}
-                      >
-                        <Ionicons 
-                          name="add" 
-                          size={16} 
-                          color={item.quantity >= item.stok_tersedia ? "#9CA3AF" : "white"} 
-                        />
-                      </Pressable>
-                    </View>
-
-                    <Pressable
-                      onPress={() => handleRemoveItem(item)}
-                      className="p-2"
-                    >
-                      <Ionicons name="trash-outline" size={20} color="#EF4444" />
-                    </Pressable>
-                  </View>
-                  
-                  <View className="flex-row justify-between items-center mt-2">
-                    <Text className="text-sm text-gray-500">
-                      Stok: {item.stok_tersedia}
-                    </Text>
-                    <Text className="text-lg font-bold text-gray-900">
-                      {formatPrice(item.subtotal)}
-                    </Text>
-                  </View>
-                </View>
+      {memuat ? (
+        <View className="flex-1 px-4 pt-4">
+          <Skeleton height={64} radiusClassName="rounded-lg" width="100%" />
+          {[0, 1, 2].map((i) => (
+            <View key={i} className="mt-4 flex-row gap-3">
+              <Skeleton width={72} height={80} radiusClassName="rounded-md" />
+              <View className="flex-1">
+                <Skeleton height={14} width="85%" />
+                <Skeleton height={12} width="45%" className="mt-2" />
+                <Skeleton height={16} width="35%" className="mt-2" />
               </View>
             </View>
           ))}
         </View>
+      ) : items.length === 0 ? (
+        <EmptyState
+          icon={<ShoppingBasket size={36} color={colors.primary600} strokeWidth={1.75} />}
+          title={teks.empty.keranjang.judul}
+          description={teks.empty.keranjang.deskripsi}
+          ctaLabel={teks.empty.keranjang.cta}
+          onCtaPress={() => router.push("/(tabs)/products")}
+        />
+      ) : (
+        <>
+          <ScrollView
+            className="flex-1"
+            contentContainerStyle={{ paddingBottom: 16 }}
+            showsVerticalScrollIndicator={false}
+            refreshControl={
+              <RefreshControl
+                refreshing={menyegarkan}
+                onRefresh={onRefresh}
+                colors={[colors.primary600]}
+                tintColor={colors.primary600}
+              />
+            }
+          >
+            <View className="px-4 pt-2">
+              <AddressCard
+                variant="ringkas"
+                alamat={
+                  alamat
+                    ? {
+                        nama_penerima: alamat.nama_penerima,
+                        telepon_penerima: alamat.telepon_penerima,
+                        alamat_lengkap: alamat.alamat_lengkap,
+                        wilayah: [alamat.kota, alamat.provinsi, alamat.kode_pos]
+                          .filter(Boolean)
+                          .join(", "),
+                      }
+                    : null
+                }
+                loading={memuatAlamat}
+                onPress={() => router.push("/addresses")}
+                onGanti={() => router.push("/addresses")}
+              />
 
-        {/* Spacer for bottom bar */}
-        <View className="h-24" />
-      </ScrollView>
+              {galatAlamat ? (
+                <View className="mt-2">
+                  <Button
+                    title={teks.tombol.cobaLagi}
+                    variant="ghost"
+                    size="sm"
+                    onPress={muatUlangAlamat}
+                  />
+                </View>
+              ) : null}
 
-      {/* Bottom Summary & Checkout */}
-      <View className="absolute bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4">
-        <View className="flex-row justify-between items-center mb-4">
-          <Text className="text-lg font-semibold text-gray-900">
-            Total ({itemCount} item)
-          </Text>
-          <Text className="text-2xl font-bold text-primary">
-            {formatPrice(totalAmount)}
-          </Text>
-        </View>
-        
-        <Pressable
-          onPress={handleCheckout}
-          className="bg-primary py-4 rounded-xl items-center"
-        >
-          <Text className="text-white font-semibold text-lg">
-            Checkout Sekarang
-          </Text>
-        </Pressable>
-      </View>
+              <View className="mt-4 divide-y divide-neutral-100">
+                {items.map((item) => (
+                  <CartItemRow
+                    key={item.id}
+                    nama={item.nama_produk}
+                    harga={item.harga}
+                    jumlah={item.quantity}
+                    stok={item.stok_tersedia}
+                    gambarUrl={item.gambar_url ?? null}
+                    keterangan={
+                      [
+                        item.varian_nama
+                          ? teks.keranjang.varian.replace("{nama}", item.varian_nama)
+                          : null,
+                        item.kategori_nama,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ") || null
+                    }
+                    onPress={() => router.push(`/product/${item.produk_id}`)}
+                    onChangeJumlah={(next) => ubahJumlah(item, next)}
+                    onHapus={() => removeItem(item.id)}
+                  />
+                ))}
+              </View>
+
+              <PriceSummary
+                className="mt-2"
+                baris={ringkasan}
+                total={totalAmount}
+                totalLabel={teks.checkout.total}
+              />
+            </View>
+          </ScrollView>
+
+          <StickyBar>
+            <StickyTotal
+              nilai={rupiah(totalAmount)}
+              catatan={teks.checkout.totalItem.replace("{jumlah}", String(itemCount))}
+            />
+            <Button
+              title={teks.tombol.lanjutkan}
+              variant="primary"
+              size="lg"
+              onPress={keCheckout}
+              accessibilityLabel={`${teks.tombol.lanjutkan} ke ${teks.judul.orderSummary.toLowerCase()}`}
+              className="w-[140px]"
+            />
+          </StickyBar>
+        </>
+      )}
     </SafeAreaView>
   );
-};
-
-export default CartScreen;
+}
