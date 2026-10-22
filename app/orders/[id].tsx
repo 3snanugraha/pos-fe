@@ -12,7 +12,6 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  Alert,
   Linking,
   RefreshControl,
   ScrollView,
