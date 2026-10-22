@@ -47,7 +47,7 @@ struktur expo-router.
 
 | Layar | Route | Isi |
 | --- | --- | --- |
-| Onboarding | `/auth/onboarding` | Hero (headline Display 32/38 + logo), 3 poin manfaat, CTA primary `Mulai Sekarang` full width, link `Lewati`. Keduanya → `/auth/login`. |
+| Onboarding | `/auth/onboarding` | Hero (headline Display 32/38 + logo), 3 poin manfaat, CTA primary `Mulai Sekarang` full width, link `Lewati`. Keduanya menandai onboarding selesai lalu → `/auth/login`. |
 | Sign In | `/auth/login` | `AppBar` varian auth (judul Title + subjudul), Input email + password (toggle eye), link `Lupa Password?` rata kanan, error per field, `KeyboardAvoidingView`, satu CTA primary. |
 | Create Account | `/auth/register` | Nama, telepon, email, password, konfirmasi. Validasi telepon Indonesia, error per field (termasuk error 422 backend), teks syarat & ketentuan, satu CTA. |
 | Forgot Password | `/auth/forgot-password` | `AppBar` auth, Input email, satu CTA `Kirim Instruksi`. |
@@ -62,6 +62,13 @@ footer sehingga CTA naik bersama keyboard.
 dirujuk `services/httpClient.ts`, `services/api.ts`, `utils/auth.ts`, dan
 `screens/ProfileScreen.tsx`. Nama route tidak berubah — hanya isinya diganti layar
 baru. `app/auth/_layout.tsx` menambahkan Stack untuk keenam route.
+
+**Onboarding hanya sekali**: `app/index.tsx` (layar loading lama, logikanya tidak
+diubah selain tambahan ini) membaca penanda `onboarding_seen` lewat
+`src/lib/onboarding.ts`. Bila belum login **dan** penanda belum ada → redirect ke
+`/auth/onboarding`; selain itu tetap ke `/auth/login` seperti sebelumnya. CTA
+`Mulai Sekarang` dan `Lewati` menulis penanda lalu `replace` ke `/auth/login`.
+Bila AsyncStorage gagal dibaca, dianggap sudah lihat agar pengguna tidak tertahan.
 
 **Tanpa tombol social**: backend pelanggan hanya punya `/customer/login` dan
 `/customer/register` (tanpa OAuth/OAuth token exchange), jadi `DividerAtau` dan dua
@@ -135,8 +142,10 @@ Tidak ada backend baru yang dibangun di fase ini (sesuai batas tugas).
 - Web mode (`npx expo start --web`), diuji terhadap mock backend yang meniru
   `routes/api.php` (port terpisah, bukan backend asli — port 8000 di mesin ini
   dipakai proses lain):
-  - Onboarding → `Mulai Sekarang` → `/auth/login` → login sukses → `/` (beranda)
-    dengan header baru + 4 tab.
+  - Boot pertama (storage kosong) → `/auth/onboarding`; setelah "Mulai Sekarang"
+    → `/auth/login`, dan boot berikutnya langsung `/auth/login` (`onboarding_seen=1`).
+  - Onboarding → `/auth/login` → login sukses → `/` (beranda) dengan header baru
+    + 4 tab.
   - Sign-in kosong → "Email wajib diisi" dan "Password wajib diisi" per field.
   - Sign-in password salah → pesan `rgb(185,28,28)` (danger-700) di bawah field,
     border field `rgb(239,68,68)` (danger-500), isi email tidak dihapus.

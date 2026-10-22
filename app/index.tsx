@@ -3,11 +3,13 @@ import { View, Text, ActivityIndicator, Animated } from 'react-native';
 import { Image } from 'expo-image';
 import { Redirect } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { sudahLihatOnboarding } from '../src/lib/onboarding';
 import { isAuthenticated, verifyToken } from '../services/auth';
 
 export default function LoadingScreen() {
   const [isLoading, setIsLoading] = useState(true);
   const [isAuth, setIsAuth] = useState(false);
+  const [onboardingSelesai, setOnboardingSelesai] = useState(true);
   const [loadingText, setLoadingText] = useState('Memuat aplikasi...');
   const [fadeAnim] = useState(() => new Animated.Value(0));
   const [scaleAnim] = useState(() => new Animated.Value(0.8));
@@ -45,8 +47,13 @@ export default function LoadingScreen() {
           await new Promise(resolve => setTimeout(resolve, 500));
           const isValidToken = await verifyToken();
           if (mounted) setIsAuth(isValidToken);
-        } else if (mounted) {
-          setIsAuth(false);
+        } else {
+          // Belum login: onboarding hanya untuk kunjungan pertama.
+          const sudah = await sudahLihatOnboarding();
+          if (mounted) {
+            setIsAuth(false);
+            setOnboardingSelesai(sudah);
+          }
         }
 
         if (mounted) setLoadingText('Siap!');
@@ -68,6 +75,10 @@ export default function LoadingScreen() {
   }, []);
 
   if (!isLoading) {
+    // Onboarding hanya sekali; sesudahnya langsung ke layar masuk.
+    if (!isAuth && !onboardingSelesai) {
+      return <Redirect href="/auth/onboarding" />;
+    }
     return <Redirect href={isAuth ? "/(tabs)" : "/auth/login"} />;
   }
 

@@ -2,23 +2,31 @@ import { LinearGradient } from "expo-linear-gradient";
 import { Image } from "expo-image";
 import { useRouter } from "expo-router";
 import { Check, Package, Sparkles, Truck } from "lucide-react-native";
+import { useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Button } from "../../components/ui";
 import { teks } from "../../lib/i18n";
+import { tandaiOnboardingSelesai } from "../../lib/onboarding";
 import { colors, gradients, sizes } from "../../theme/tokens";
 
 /**
  * Onboarding Zovora — guideline §2.5/§4.
  * Hero image di kanan, headline Display di kiri atas, CTA full width bawah.
  * Satu CTA primary ("Mulai Sekarang") + link text "Lewati" — keduanya menuju
- * sign-in sehingga alur lama (`/auth/login`) tetap jadi pintu masuk.
+ * sign-in dan menandai onboarding sudah dilihat supaya tidak tampil lagi.
  */
 export function OnboardingScreen() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  const [lanjut, setLanjut] = useState(false);
 
-  const mulai = () => router.replace("/auth/login");
+  const selesai = async () => {
+    if (lanjut) return;
+    setLanjut(true);
+    await tandaiOnboardingSelesai();
+    router.replace("/auth/login");
+  };
 
   return (
     <View className="flex-1 bg-white">
@@ -30,7 +38,7 @@ export function OnboardingScreen() {
       >
         <View className="flex-row justify-end px-6 pt-2">
           <Pressable
-            onPress={mulai}
+            onPress={selesai}
             accessibilityRole="link"
             accessibilityLabel={teks.auth.onboarding.lewati}
             hitSlop={sizes.hitSlop}
@@ -85,7 +93,7 @@ export function OnboardingScreen() {
       <View className="px-6" style={{ paddingBottom: insets.bottom + 16 }}>
         <Button
           title={teks.tombol.getStarted}
-          onPress={mulai}
+          onPress={selesai}
           fullWidth
           accessibilityLabel={teks.tombol.getStarted}
         />
