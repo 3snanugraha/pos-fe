@@ -1,6 +1,6 @@
 import { Ionicons } from "@expo/vector-icons";
 import { useRouter } from "expo-router";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
@@ -56,6 +56,13 @@ const CheckoutScreen = () => {
   const [error, setError] = useState<string | null>(null);
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
 
+  /**
+   * Setelah order berhasil, keranjang sengaja dikosongkan. Tanpa penanda ini,
+   * effect "keranjang kosong" ikut terpicu dan pengguna melihat dialog
+   * "Keranjang Kosong" tepat saat halaman sukses tampil.
+   */
+  const orderPlacedRef = useRef(false);
+
   const saldoPoin = Number(profile?.total_poin ?? 0);
 
   const loadCheckoutData = async () => {
@@ -95,6 +102,10 @@ const CheckoutScreen = () => {
   };
 
   useEffect(() => {
+    // Jangan tampilkan "keranjang kosong" setelah order dibuat (cart memang
+    // sengaja dikosongkan) maupun saat proses submit masih berjalan.
+    if (orderPlacedRef.current || isProcessingOrder) return;
+
     if (items.length === 0) {
       Alert.alert(
         "Keranjang Kosong",
@@ -105,7 +116,7 @@ const CheckoutScreen = () => {
     }
 
     loadCheckoutData();
-  }, [items.length, router]);
+  }, [items.length, isProcessingOrder, router]);
 
   const handleApplyPromo = async () => {
     if (!promoCode.trim()) {
@@ -319,6 +330,7 @@ const CheckoutScreen = () => {
       };
 
       let result;
+      let poinTerpakai = poinValue.dipakai;
       try {
         result = await apiService.createOrder(payload);
       } catch (err: any) {
@@ -335,21 +347,34 @@ const CheckoutScreen = () => {
 
         console.warn("Order dengan poin ditolak backend, ulangi tanpa poin:", err);
         result = await apiService.createOrder({ ...payload, poin_digunakan: 0 });
+        poinTerpakai = 0;
         Alert.alert(
           "Poin belum bisa dipakai",
           "Server menolak penggunaan poin (bug pencatatan riwayat poin di backend). Pesanan tetap dibuat tanpa poin — poin Anda tidak berkurang."
         );
       }
 
+      // Tandai dulu supaya effect "keranjang kosong" tidak terpicu.
+      orderPlacedRef.current = true;
       await clearCart();
+
+      /**
+       * Angka yang ditampilkan di halaman sukses diambil dari RESPONS server,
+       * bukan dari hitungan lokal: saat jalur fallback tanpa poin dipakai,
+       * total dan poin sebenarnya berbeda dari yang dihitung di layar.
+       */
+      const totalServer = Number((result as any)?.total_bayar);
+      const totalAkhir = Number.isFinite(totalServer) && totalServer > 0
+        ? totalServer
+        : finalTotal;
 
       router.replace({
         pathname: "/checkout/success",
         params: {
           orderNumber: result.nomor_transaksi || "N/A",
           orderId: String(result.id ?? ""),
-          totalAmount: String(finalTotal),
-          poin: String(poinValue.dipakai),
+          totalAmount: String(totalAkhir),
+          poin: String(poinTerpakai),
         },
       });
     } catch (error: any) {

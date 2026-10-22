@@ -26,8 +26,19 @@ const CheckoutSuccessScreen = () => {
   const [order, setOrder] = useState<OrderDetail | null>(null);
 
   const orderId = params.orderId ? parseInt(String(params.orderId), 10) : NaN;
-  const total = Number(params.totalAmount ?? 0) || 0;
-  const poinDipakai = Number(params.poin ?? 0) || 0;
+  const totalParam = Number(params.totalAmount ?? 0) || 0;
+  const poinParam = Number(params.poin ?? 0) || 0;
+
+  /**
+   * Nilai final diambil dari data order bila sudah termuat.
+   *
+   * Param URL berasal dari perhitungan lokal checkout dan bisa berbeda dengan
+   * angka server — mis. saat server menolak pemakaian poin sehingga order
+   * tersimpan tanpa potongan poin. Menampilkan angka param saja membuat
+   * pelanggan melihat total yang salah.
+   */
+  const total = Number((order as any)?.total_bayar) || totalParam;
+  const poinDipakai = Number((order as any)?.poin_digunakan) || poinParam;
 
   const expiry = useOrderExpiry(order?.order_expires_at, order?.status ?? "pending");
 
