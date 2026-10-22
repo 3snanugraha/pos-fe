@@ -13,3 +13,4 @@ export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export { Input, type InputProps } from "./Input";
 export { OtpInput, type OtpInputProps } from "./OtpInput";
 export { Stepper, type StepperProps } from "./Stepper";
+export { Toggle, type ToggleProps } from "./Toggle";

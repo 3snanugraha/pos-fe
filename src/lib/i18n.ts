@@ -292,6 +292,104 @@ export const teks = {
     ukuran: "Ukuran",
     jumlah: "Jumlah",
     penghitunganPoin: "Poin akan dihitung setelah pembayaran",
+    lanjutPembayaran: "Lanjutkan",
+    pilihPembayaran: "Pilih metode pembayaran",
+    pembayaranCampuran: "Pembayaran Campuran",
+    pembayaranCampuranDeskripsi:
+      "Gabungkan beberapa metode pembayaran (mis. tunai + transfer).",
+    rincianPembayaran: "Rincian Pembayaran",
+    tagihan: "Tagihan {nilai}",
+    metodeKe: "Metode {nomor}",
+    tambahMetode: "Tambah Metode",
+    hapusMetode: "Hapus metode {nomor}",
+    sudahDialokasikan: "Sudah dialokasikan",
+    kurang: "Kurang",
+    kembalian: "Kembalian",
+    splitCatatanKaki:
+      "Rincian ini ikut tercatat di catatan pesanan agar kasir dapat mencocokkan pembayaran.",
+    splitBelumLengkap: "Pembayaran campuran butuh minimal 2 metode dengan nominal.",
+    splitMaksimal: "Split pembayaran dibatasi 4 metode.",
+    sisaOtomatis: "Sisa",
+    nominalPlaceholder: "0",
+    kodePromo: "Kode Promo",
+    kodePromoPlaceholder: "Masukkan kode promo",
+    pakai: "Pakai",
+    promoDiterapkan: "Diskon {nilai} telah diterapkan",
+    saldoPoin: "Saldo {jumlah} poin",
+    poinKeterangan:
+      "1 poin = {nilai}. Maksimal {maks} poin untuk pesanan ini.",
+    poinMaks: "Maks",
+    poinDipakai: "{jumlah} poin = -{nilai}",
+    poinTidakTersedia: "Belum ada poin tersedia.",
+    poinTidakBisaDipakai: "Tagihan sudah 0 setelah promo — poin tidak dapat dipakai.",
+    gunakanPoin: "Gunakan Poin",
+    catatan: "Catatan Pesanan",
+    catatanPlaceholder: "Tulis catatan untuk pesanan Anda…",
+    catatanOpsional: "Catatan Pesanan (opsional)",
+    itemPesanan: "Item Pesanan",
+    instruksiPembayaran: "Instruksi Pembayaran",
+    nomorRekening: "Nomor Rekening",
+    atasNama: "Atas Nama",
+    rekeningBelumDiatur: "Rekening tujuan belum diatur admin",
+    transferKe: "Transfer ke {rekening} a.n. {nama}",
+    metodeTidakAda: "Belum ada metode pembayaran aktif. Hubungi admin toko.",
+    ongkirGratis: "Gratis",
+    totalItem: "{jumlah} item",
+    diskonPoin: "Poin ({jumlah} poin)",
+  },
+
+  /** Keranjang (W4). */
+  keranjang: {
+    alamatBelumAda: "Pilih alamat pengiriman",
+    ganti: "Ganti",
+    stok: "Stok {jumlah}",
+    hapusItem: "Hapus {nama} dari keranjang",
+    tambah: "Tambah",
+    kurangi: "Kurangi",
+    satuan: "per item",
+    varian: "Varian {nama}",
+    memuatAlamat: "Memuat alamat…",
+    ringkasanHarga: "Ringkasan Harga",
+  },
+
+  /** Pesanan berhasil (W4). */
+  sukses: {
+    judul: "Pesanan Berhasil Dibuat!",
+    deskripsi:
+      "Pesanan menunggu verifikasi kasir. Selesaikan pembayaran sesuai instruksi di bawah agar pesanan segera diproses.",
+    nomorPesanan: "Nomor Pesanan",
+    totalBayar: "Total Bayar",
+    poinDigunakan: "Poin digunakan",
+    lacakPesanan: "Lacak Pesanan",
+    kembaliBeranda: "Kembali ke Beranda",
+    batasWaktu: "Batas waktu pembayaran",
+    kedaluwarsa: "Pesanan kedaluwarsa",
+    sampaiDengan: "s.d. {waktu}",
+    statusJudul: "Status Pesanan",
+    statusDeskripsi:
+      "Pantau status di Riwayat Pesanan. Status berubah otomatis setelah kasir memverifikasi (diproses/selesai) atau menolak pesanan.",
+  },
+
+  /** Notifikasi (W4). */
+  notifikasi: {
+    semua: "Semua",
+    belumDibaca: "Belum dibaca",
+    tandaiSemua: "Tandai semua dibaca",
+    tandaiSemuaJudul: "Tandai Semua Sudah Dibaca?",
+    tandaiSemuaDeskripsi: "Semua notifikasi akan ditandai sebagai sudah dibaca.",
+    berhasilTandai: "Semua notifikasi telah ditandai sebagai sudah dibaca.",
+    gagalTandai: "Gagal menandai notifikasi. Silakan coba lagi.",
+    belumAdaBaru: "Tidak Ada Notifikasi Baru",
+    semuaDibaca: "Semua notifikasi sudah dibaca.",
+    menu: "Menu notifikasi",
+    belumDibacaA11y: "Belum dibaca",
+  },
+
+  /** Dialog izin notifikasi (soft-prompt, guideline §3.17). */
+  izinNotifikasi: {
+    judul: "Jangan Lewatkan Penawaran",
+    deskripsi:
+      "Aktifkan notifikasi agar kami bisa memberi tahu status pesanan dan promo terbaru.",
   },
 
   /** Status pesanan. */
