@@ -346,13 +346,50 @@ export class ApiService {
 
   /**
    * Get order details by ID
+   *
+   * `CustomerOrderController@show` hanya mengirim
+   * `metode_pembayaran: { id, nama, jenis }` — tanpa `nomor_rekening` /
+   * `atas_nama`. Akibatnya instruksi "transfer ke rekening X" tidak pernah
+   * muncul di halaman sukses maupun detail order. Data rekening dilengkapi
+   * di sini dari `getPaymentMethods()` (yang sudah menggabungkan route staff
+   * dan di-cache), jadi semua pemanggil ikut terbantu. Kegagalan pelengkap
+   * tidak boleh menggagalkan detail order.
    */
   async getOrderDetails(id: number): Promise<Types.Order> {
     const response = await httpClient.get<Types.Order>(
       API_ENDPOINTS.customer.orderDetail(id),
       true
     );
-    return response.data;
+
+    const order = response.data;
+    const metode = order?.metode_pembayaran as
+      | { id?: number | null; nama?: string; jenis?: string; nomor_rekening?: string | null; atas_nama?: string | null }
+      | string
+      | null
+      | undefined;
+
+    // List endpoint mengirim nama metode sebagai string; detail sebagai objek.
+    if (!metode || typeof metode === "string") return order;
+    if (metode.nomor_rekening || metode.atas_nama) return order;
+
+    try {
+      const methods = await this.getPaymentMethods();
+      const cocok = methods.find(
+        (m) => (metode.id != null && m.id === metode.id) || m.nama_metode === metode.nama
+      );
+      if (!cocok) return order;
+
+      return {
+        ...order,
+        metode_pembayaran: {
+          ...(metode as Record<string, unknown>),
+          nomor_rekening: cocok.nomor_rekening ?? null,
+          atas_nama: cocok.atas_nama ?? null,
+        } as Types.Order["metode_pembayaran"],
+      };
+    } catch {
+      return order;
+    }
   }
 
   /**
