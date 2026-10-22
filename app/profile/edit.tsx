@@ -136,7 +136,7 @@ export default function EditProfileScreen() {
     const hasil = validasi();
     setGalat(hasil);
     if (Object.keys(hasil).length > 0) {
-      setPesan({ judul: teks.umum.gagal, isi: teks.error.umum, sukses: false });
+      setPesan({ judul: teks.umum.gagal, isi: teks.profil.ubah.periksaField, sukses: false });
       return;
     }
 

@@ -132,8 +132,12 @@ export function HomeHeader({
           className="mt-3 flex-row items-center gap-2 rounded-md border border-neutral-200 bg-white px-3"
           style={{ height: sizes.searchBar }}
         >
-          <Search size={20} color={colors.neutral400} strokeWidth={1.75} />
-          <Text className="flex-1 font-inter text-sm text-neutral-400" numberOfLines={1}>
+          <Search size={20} color={colors.neutral500} strokeWidth={1.75} />
+          <Text
+            className="flex-1 font-inter text-sm text-neutral-500"
+            numberOfLines={1}
+            maxFontSizeMultiplier={1.3}
+          >
             {searchPlaceholder}
           </Text>
         </Pressable>

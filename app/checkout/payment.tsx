@@ -107,7 +107,7 @@ export default function PaymentScreen() {
           description: [jenisLabel(metode.jenis_pembayaran)]
             .concat(
               Number(metode.biaya_admin) > 0
-                ? [`Biaya admin ${rupiah(metode.biaya_admin)}`]
+                ? [teks.checkout.biayaAdmin.replace("{nilai}", rupiah(metode.biaya_admin))]
                 : []
             )
             .join(" · "),

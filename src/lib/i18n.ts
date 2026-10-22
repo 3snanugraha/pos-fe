@@ -336,6 +336,7 @@ export const teks = {
     ongkirGratis: "Gratis",
     totalItem: "{jumlah} item",
     diskonPoin: "Poin ({jumlah} poin)",
+    biayaAdmin: "Biaya admin {nilai}",
   },
 
   /** Keranjang (W4). */
@@ -733,6 +734,7 @@ export const teks = {
       teleponWajib: "Nomor telepon tidak boleh kosong",
       passwordTidakCocok: "Konfirmasi password tidak sama",
       passwordPendek: "Password minimal 8 karakter",
+      periksaField: "Periksa kembali kolom yang ditandai merah.",
     },
   },
 

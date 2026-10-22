@@ -197,7 +197,10 @@ export default function PaymentMethodsScreen() {
                         ? ` · ${teks.metodeBayar.biayaAdmin.replace("{nilai}", rupiah(biaya))}`
                         : ` · ${teks.metodeBayar.tanpaBiaya}`}
                       {persen > 0
-                        ? ` · ${teks.metodeBayar.persentase.replace("{persen}", String(persen))}`
+                        ? ` · ${teks.metodeBayar.persentase.replace(
+                            "{persen}",
+                            String(persen).replace(".", ",")
+                          )}`
                         : ""}
                     </Text>
                   </View>

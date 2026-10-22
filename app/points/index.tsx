@@ -234,8 +234,12 @@ export default function PointsHistoryScreen() {
             />
           }
         >
-          {/* Kartu saldo — primary-600 + teks putih (kontras 4,9:1). */}
-          <View className="rounded-lg bg-primary-600 p-5">
+          {/*
+            Kartu saldo — bg primary-700 (bukan primary-600): label Caption 10pt
+            dan nilai kecil di atas primary-600 hanya 4,1:1 dan gagal AA untuk
+            teks kecil. primary-700 = 5,9:1 (guideline §2.1 & §7).
+          */}
+          <View className="rounded-lg bg-primary-700 p-5">
             <Text
               className="font-inter text-sm text-white"
               maxFontSizeMultiplier={1.3}

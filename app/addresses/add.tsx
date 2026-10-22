@@ -107,7 +107,7 @@ export default function AddAddressScreen() {
         onClose={() => {
           const sukses = pesan?.sukses;
           setPesan(null);
-          if (sukses) router.back();
+          if (sukses) router.replace("/addresses");
         }}
         title={pesan?.judul}
         description={pesan?.isi}
@@ -119,7 +119,7 @@ export default function AddAddressScreen() {
             onPress={() => {
               const sukses = pesan?.sukses;
               setPesan(null);
-              if (sukses) router.back();
+              if (sukses) router.replace("/addresses");
             }}
           />
         }

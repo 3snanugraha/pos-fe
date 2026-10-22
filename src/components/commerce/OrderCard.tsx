@@ -24,7 +24,10 @@ export type OrderCardProps = {
 const namaMetode = (metode: Order["metode_pembayaran"]): string => {
   if (!metode) return "-";
   if (typeof metode === "string") return metode;
-  return metode.nama_metode ?? "-";
+  // Backend list mengirim string; detail mengirim objek dengan `nama`
+  // (OrderDetail) atau `nama_metode` (PaymentMethod) — dua-duanya diterima.
+  const obj = metode as { nama_metode?: string; nama?: string };
+  return obj.nama_metode ?? obj.nama ?? "-";
 };
 
 /**
@@ -156,7 +159,7 @@ export function OrderCard({
           <Button
             title={teks.pesanan.beliLagi}
             variant="outline"
-            size="md"
+            size="lg"
             fullWidth
             loading={reordering}
             loadingText={teks.umum.memuat}

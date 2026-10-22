@@ -65,10 +65,19 @@ const spinnerColor: Record<ButtonVariant, string> = {
   ghost: colors.primary600,
 };
 
+/** Padding sentuh tambahan agar md (40) dan sm (32) tetap >= 44 pt (§7). */
+const hitSlopCls: Record<ButtonSize, number> = {
+  lg: 0,
+  md: 4,
+  sm: 8,
+};
+
 /**
  * Button Zovora — guideline §3.1.
  * Varian: primary | outline | social | ghost × ukuran lg (48) | md (40) | sm (32).
  * Radius md (8), pressed state warna lebih gelap, disabled opacity 50%.
+ * Ukuran md/sm diperluas lewat `hitSlop` supaya target sentuh tetap >= 44 pt
+ * tanpa mengubah tinggi visualnya (guideline §7).
  */
 export function Button({
   title,
@@ -86,6 +95,7 @@ export function Button({
   className = "",
 }: ButtonProps) {
   const off = disabled || loading;
+  const slop = hitSlopCls[size];
 
   return (
     <Pressable
@@ -95,6 +105,7 @@ export function Button({
       accessibilityState={{ disabled: off, busy: loading }}
       disabled={off}
       onPress={onPress}
+      hitSlop={slop > 0 ? { top: slop, bottom: slop, left: 0, right: 0 } : undefined}
       className={`flex-row items-center justify-center gap-2 rounded-md ${sizeCls[size]} ${boxCls[variant]} ${off ? "opacity-50" : ""} ${fullWidth ? "w-full" : "self-start"} ${className}`}
       style={({ pressed }) => (pressed && !off ? { opacity: 0.92 } : null)}
     >
