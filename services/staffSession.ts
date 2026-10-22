@@ -288,6 +288,16 @@ export const loginStaffSession = async (
   }
 };
 
+/**
+ * HTML halaman login (form `password` / judul "Login").
+ *
+ * Dipakai untuk mendeteksi redirect middleware `auth`: `fetch` mengikuti
+ * redirect sehingga respons tetap `200 OK`, tetapi isinya form login —
+ * bukan halaman kasir.
+ */
+const isLoginPageHtml = (html: string): boolean =>
+  /name="password"/i.test(html) || /<title>[^<]*login/i.test(html);
+
 /** Ambil ulang token CSRF dari halaman verifikasi order. */
 export const refreshCsrfToken = async (): Promise<string> => {
   const page = await fetch(`${API_ORIGIN}${WEB_ENDPOINTS.onlineOrdersPage}`, {
@@ -300,6 +310,19 @@ export const refreshCsrfToken = async (): Promise<string> => {
   if (!page.ok) {
     throw new StaffSessionUnavailableError(
       `Halaman kasir menolak sesi (HTTP ${page.status}).`
+    );
+  }
+
+  /**
+   * Redirect ke /login ikut ter-follow dan menghasilkan 200 berisi form login
+   * yang JUGA punya meta csrf-token. Tanpa pengecekan ini token halaman login
+   * dianggap token kasir, `loginStaffSession()` berhenti di langkah "sesi sudah
+   * ada" (tidak pernah benar-benar login), dan setiap verifikasi berakhir
+   * 419/401.
+   */
+  if (isLoginPageHtml(html)) {
+    throw new StaffSessionUnavailableError(
+      "Sesi kasir belum aktif — halaman kasir mengalihkan ke login."
     );
   }
 
