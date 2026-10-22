@@ -40,3 +40,7 @@ yarn-error.*
 *.tsbuildinfo
 
 app-example
+
+# artefak lokal (log uji, mock, APK hasil build)
+.tmp-w*/
+build-output/

@@ -1,0 +1,574 @@
+# Zovora — Design Guidelines (Tema Biru Muda)
+
+*Versi 1.0 · 23 Oktober 2026 · React Native + NativeWind (Tailwind CSS)*
+
+Dokumen ini mengubah UI kit e-commerce Anda (24 layar: onboarding, auth, home, search, notifikasi, saved items, detail produk, review, cart, checkout) menjadi design guidelines yang siap diimplementasikan. Warna dominan ungu diganti menjadi **biru muda**. Ukuran diestimasi dari gambar yang dinormalisasi ke lebar layar 390 pt, jadi anggap sebagai titik awal dan cocokkan dengan file Figma aslinya bila ada. Nama “Zovora” diambil dari dialog notifikasi di kit; ganti dengan nama aplikasi Anda.
+
+## 1. Prinsip Desain
+
+1. **Bersih dan lega.** Latar putih, border tipis, warna brand dipakai hemat agar CTA menonjol.
+2. **Satu aksi utama per layar.** Satu tombol terisi per layar; aksi lain berupa outline atau teks.
+3. **State selalu lengkap.** Setiap layar berisi data punya empty, error, dan loading state dengan pola yang sama.
+4. **Ramah jempol.** CTA utama di bagian bawah (sticky bar) dan target sentuh minimal 44 pt.
+5. **Aksen per kategori.** Header Home berganti tema per kategori (For You = biru, Beauty = peach); komponen lain tetap biru.
+
+## 2. Foundations
+
+### 2.1 Warna
+
+Palet primary memakai skala Sky dari Tailwind, jadi langsung kompatibel dengan NativeWind.
+
+| Token | Hex | Pemakaian |
+| --- | --- | --- |
+| primary-50 | #F0F9FF | Bg kartu price summary, baris terpilih, ujung bawah gradien header |
+| primary-100 | #E0F2FE | Lingkaran ikon empty state, chip, ring fokus input |
+| primary-200 | #BAE6FD | Ujung atas gradien header Home, border tint |
+| primary-300 | #7DD3FC | Ilustrasi dan dekorasi |
+| primary-400 | #38BDF8 | Dekoratif saja (kontras rendah di atas putih) |
+| primary-500 | #0EA5E9 | Warna brand: border fokus, bar rating, ikon aksen |
+| primary-600 | #0284C7 | Fill CTA, banner, badge diskon, ikon tab aktif |
+| primary-700 | #0369A1 | State pressed, teks link di atas putih |
+| primary-800 | #075985 | Teks di atas primary-100 |
+| primary-900 | #0C4A6E | Teks gelap bertema biru |
+
+Netral memakai skala Slate agar selaras dengan biru (lebih dingin daripada abu-abu murni).
+
+| Token | Hex | Pemakaian |
+| --- | --- | --- |
+| neutral-50 | #F8FAFC | Bg layar alternatif, bg gambar produk |
+| neutral-100 | #F1F5F9 | Bg input disabled, chip netral, divider tipis |
+| neutral-200 | #E2E8F0 | Border input, kartu, divider |
+| neutral-300 | #CBD5E1 | Dot pagination inaktif |
+| neutral-400 | #94A3B8 | Placeholder, ikon inaktif, harga coret |
+| neutral-500 | #64748B | Teks sekunder (subjudul, deskripsi) |
+| neutral-700 | #334155 | Teks isi |
+| neutral-900 | #0F172A | Judul dan teks utama |
+
+Semantik dan aksen:
+
+| Token | Hex | Pemakaian |
+| --- | --- | --- |
+| success-100 / 700 | #DCFCE7 / #15803D | Banner Total Amount (Payment), ikon Order Shipped |
+| danger-500 | #EF4444 | Border dan pesan error, dot unread, ikon hapus, heart tersimpan, badge jumlah cart |
+| warning-500 | #F59E0B | Bintang rating |
+| warning-50 | #FFFBEB | Bg kotak ringkasan rating |
+| peach-200 / 300 | #FED7AA / #FDBA74 | Tema Beauty (header dan banner), ikon notifikasi penawaran |
+
+Tema kategori Home (header berupa gradien dari atas ke putih):
+
+| Kategori | Gradien header | Banner |
+| --- | --- | --- |
+| For You | primary-200 → primary-50 → putih | primary-500 → primary-600, teks putih |
+| Beauty | peach-200 → putih | peach-300, teks neutral-900 |
+| Fashion, Mobiles, Electronics, Appliances | Saran: rose-200 #FECDD3, indigo-200 #C7D2FE, teal-200 #99F6E4, emerald-200 #A7F3D0 | Satu tingkat lebih pekat dari header |
+
+Kit hanya memperlihatkan For You dan Beauty; empat kategori lainnya adalah saran saya.
+
+Konversi dari kit asli (ungu → biru muda):
+
+| Elemen | Token baru |
+| --- | --- |
+| Tombol primary, banner New Collection, badge diskon, tombol Place Order | primary-600 |
+| Tombol outline (Add to Cart, Don’t Allow) | Border primary-600, teks primary-700 |
+| Link (Forgot Password?, Sign Up, Resend code, Change, View All) | primary-700 |
+| Tab bar dan category tab aktif | Ikon primary-600, label primary-700 |
+| Lingkaran ikon empty state | primary-100 dengan ikon primary-600 |
+| Kartu Price Summary (lavender) | primary-50 dengan border primary-100 |
+| Gradien header Home (ungu muda → putih) | primary-200 → primary-50 → putih |
+| Bar distribusi rating | primary-500 |
+| Dot pagination aktif | primary-600 |
+| Border fokus input | primary-500 |
+
+Aturan kontras (dihitung terhadap putih):
+
+- primary-700 = 5,9:1, aman untuk teks kecil dan link.
+- primary-600 = 4,1:1, cukup untuk fill dengan teks putih semibold 16 pt dan untuk ikon (minimal 3:1). Jika ingin AA penuh (4,5:1) untuk label tombol, naikkan fill CTA ke primary-700; cukup mengganti satu token.
+- primary-500 = 2,8:1 dan primary-400 = 2,1:1, jadi jangan dipakai untuk teks atau sebagai fill di bawah teks putih. Hanya untuk dekorasi, bar, border, dan ikon besar.
+- neutral-500 = 4,8:1 adalah batas terendah untuk teks sekunder. Placeholder neutral-400 (2,6:1) hanya untuk placeholder, bukan informasi penting.
+
+### 2.2 Tipografi
+
+Font: **Inter** (kit memakai sans-serif bersih bergaya Inter), dimuat lewat `@expo-google-fonts/inter` dengan bobot Regular, Medium, SemiBold, dan Bold.
+
+| Peran | Kelas NativeWind | Ukuran / line-height | Dipakai untuk |
+| --- | --- | --- | --- |
+| Display | `text-4xl font-inter-bold` | 32 / 38 | Headline onboarding |
+| Title | `text-2xl font-inter-bold` | 24 / 30 | Judul layar auth (Sign In, Create Account, Forgot Password) |
+| Heading | `text-xl font-inter-semibold` | 20 / 26 | Digit OTP, angka rating besar, judul banner, total di sticky bar |
+| Subheading | `text-lg font-inter-semibold` | 18 / 24 | Judul dialog dan empty state |
+| Section | `text-base font-inter-semibold` | 16 / 24 | Judul AppBar, section header (Featured, Flash Sale), label tombol lg, harga produk |
+| Body | `text-sm font-inter` / `font-inter-medium` | 14 / 20 | Label input, isi daftar, label tombol md |
+| Small | `text-xs font-inter` | 12 / 16 | Subjudul layar, helper dan pesan error, link, deskripsi, label avatar |
+| Caption | `text-caption font-inter-medium` | 10 / 14 | Label tab bar, waktu notifikasi, badge |
+
+Angka harga, jumlah, dan kuantitas memakai `tabular-nums`. Harga coret memakai Small, neutral-400, line-through. Biarkan `allowFontScaling` aktif dengan `maxFontSizeMultiplier={1.3}` pada tab bar dan badge.
+
+### 2.3 Spacing dan Layout
+
+Skala 4 pt mengikuti kelas Tailwind bawaan: `1` = 4, `2` = 8, `3` = 12, `4` = 16, `5` = 20, `6` = 24, `8` = 32, `10` = 40, `12` = 48.
+
+| Aturan | Nilai |
+| --- | --- |
+| Margin horizontal layar | Auth dan onboarding 24 (`px-6`); layar app 16 (`px-4`) |
+| Jarak antar field form | 16; label ke field 6 |
+| Jarak antar section | 24; judul section ke konten 12 |
+| Grid produk | 2 kolom, gap 12 |
+| Featured (avatar bulat) | 56 pt, scroll horizontal, gap 16 |
+| Subkategori Beauty | Kotak `rounded-lg`, 5 kolom, gap 8 |
+| Tinggi tetap | AppBar 56, Input 48, Button lg 48, Search bar 44, Tab bar 64 + inset bawah |
+| Safe area | Pakai `react-native-safe-area-context`; sticky bar menambah inset bawah |
+
+### 2.4 Radius, Border, Elevasi
+
+| Token | Nilai | Dipakai untuk |
+| --- | --- | --- |
+| `rounded-sm` | 6 | Badge, chip kecil, thumbnail suggestion |
+| `rounded-md` | 8 | Input, tombol, search bar, thumbnail warna |
+| `rounded-lg` | 12 | Kartu, banner, gambar produk, price summary |
+| `rounded-xl` | 16 | Dialog |
+| `rounded-2xl` | 24 | Bottom sheet (sudut atas) |
+| `rounded-full` | — | Avatar kategori, dot, tombol ikon bulat |
+
+Border standar 1 pt neutral-200. Kit hampir flat: kartu memakai border, bukan shadow.
+
+| Level | Spesifikasi | Dipakai untuk |
+| --- | --- | --- |
+| 0 | Tanpa shadow, border neutral-200 | Kartu, input |
+| 1 `shadow-bar` | 0 −2 8, rgba(15,23,42,.06) | Sticky bottom bar, tab bar |
+| 2 `shadow-float` | 0 2 8, rgba(15,23,42,.12) | Tombol ikon bulat di atas gambar atau gradien |
+| 3 `shadow-modal` | 0 8 24, rgba(15,23,42,.20) | Dialog, dengan overlay neutral-900 50% |
+
+### 2.5 Ikonografi dan Imagery
+
+- **Ikon:** Lucide (`lucide-react-native` + `react-native-svg`), stroke 1,75; ukuran 16 (di dalam chip), 20 (inline), 24 (AppBar dan tab bar). Inaktif neutral-400 atau neutral-600, aktif primary-600; ikon tab aktif boleh diisi (fill).
+- **Ikon yang dipakai di kit:** arrow-left, ellipsis, bell, bell-off, heart, shopping-bag, shopping-cart, search, mic, camera, eye, eye-off, map-pin, chevron-down/up/right, arrow-up-left, trash-2, minus, plus, star, x, house, layout-grid, user, check, truck, tag.
+- **Logo Google dan Apple** memakai aset resmi tanpa diwarnai ulang.
+- **Foto produk:** rasio 3:4 (grid) atau 1:1 (hero detail), bg neutral-50, `contentFit=cover`, radius lg. Gunakan `expo-image` dengan placeholder blurhash.
+- **Onboarding:** foto model cutout di kanan, headline di kiri atas, CTA full width di bawah.
+- **Avatar kategori:** lingkaran 56 berisi foto, label Small di bawahnya.
+
+### 2.6 Motion
+
+| Interaksi | Spesifikasi |
+| --- | --- |
+| Press tombol atau kartu | Scale 0,98 dan warna pressed, 100 ms |
+| Banner carousel | Auto-play 4 dtk, geser 300 ms ease-out |
+| Accordion Payment | Tinggi dan putaran chevron, 200 ms |
+| Dialog | Fade dan scale 0,95 → 1, 200 ms |
+| Skeleton | Shimmer 1,2 dtk, neutral-100 → neutral-200 |
+| Transisi layar | Native stack default; modal naik dari bawah |
+
+Hormati pengaturan Reduce Motion di perangkat.
+
+## 3. Komponen
+
+### 3.1 Button
+
+| Varian | Spesifikasi | Dipakai di kit |
+| --- | --- | --- |
+| Primary | Bg primary-600, teks putih Section; pressed primary-700; disabled opacity 50% | Get Started, Login, Sign Up, Send Code, Continue, Place Order, Buy at Rp…, Shop Now, Browse Products |
+| Outline | Bg putih, border 1 primary-600, teks primary-700 | Add to Cart, Don’t Allow |
+| Social | Bg putih, border 1 neutral-200, ikon brand 20 dan teks neutral-900 Body medium | Continue with Google / Apple |
+| Text link | Teks primary-700 Small medium tanpa bg, `hitSlop` 8 | Forgot Password?, Sign Up, Resend code, Change, View All, Clear All |
+| Icon button | Lingkaran 36, bg putih, `shadow-float`, ikon 20 | Heart dan bag di header Home, heart dan cart di detail produk |
+
+Ukuran: **lg** 48 (full width, CTA utama), **md** 40 (di dalam dialog atau kartu), **sm** 32. Radius `rounded-md`. Saat loading, spinner menggantikan label dengan lebar tetap. Dua tombol berdampingan (Add to Cart dan Buy at …) memakai gap 12 dan tombol Buy lebih lebar (flex 1,3 : 1).
+
+### 3.2 Input dan Form
+
+- Label: Body medium neutral-900, jarak ke field 6.
+- Field: tinggi 48, `rounded-md`, border 1 neutral-200, bg putih, padding horizontal 12, teks Body neutral-900, placeholder neutral-400.
+- State: default, fokus (border primary-500 dan ring 2 pt primary-100), terisi, error (border danger-500, pesan Small danger-500 di bawah field, mis. “Incorrect Password”), disabled (bg neutral-100, teks neutral-400).
+- Password: ikon eye atau eye-off 20 neutral-400 di kanan sebagai toggle. Link “Forgot Password?” rata kanan di bawah field.
+- Set `keyboardType`, `autoCapitalize`, `autoComplete`, dan `textContentType` sesuai jenis field. Validasi saat blur dan saat submit.
+
+### 3.3 OTP 4 Digit
+
+- Empat kotak 48 × 48, gap 12, terpusat; radius md, border neutral-200; kotak aktif border primary-500; digit memakai Heading.
+- Subjudul menampilkan email tersamarkan (mis. su\*\*\*\*er@gmail.com). Di bawah kotak: “Email not received?” dan link **Resend code** (Small, rata tengah). Resend dinonaktifkan dengan hitung mundur 30 dtk.
+- Auto-advance antar kotak, dukung paste dan `textContentType=oneTimeCode`. Kode salah: semua kotak border danger-500 dan pesan error di bawahnya.
+
+### 3.4 Search
+
+- **Search bar:** tinggi 44, `rounded-md`, border neutral-200, ikon search 20 di kiri, placeholder yang berganti-ganti (Search ‘Mobile’), ikon mic dan camera di kanan (voice dan visual search). Saat mengetik, ikon kanan menjadi x (clear) dan muncul back arrow di kiri.
+- **Recent Searches:** judul Section dan link “Clear All”; avatar bulat 48 dengan label Small, scroll horizontal. **Trending Searches:** pola sama dengan thumbnail kotak `rounded-md`.
+- **Suggestion list:** baris tinggi 52, thumbnail 28 `rounded-sm`, teks Body, ikon arrow-up-left di kanan (menyalin saran ke kolom pencarian), divider neutral-100. Bagian yang cocok dengan query boleh dicetak tebal.
+- **Tanpa hasil:** lihat empty state di bagian 5.
+
+### 3.5 AppBar dan Header Home
+
+- **AppBar standar:** tinggi 56, back arrow 24 di kiri, judul Section di tengah, aksi opsional di kanan (ellipsis), bg putih tanpa shadow.
+- **Varian auth:** tombol back kotak 32 (`rounded-md`, bg neutral-100), lalu judul Title dan subjudul Small neutral-500 di bawahnya.
+- **Header Home:** bg gradien tema kategori yang menjangkau hingga di bawah category tabs. Baris 1: “Home” (Section bold), alamat Small neutral-700 yang dipotong, chevron-down; di kanan dua icon button (heart dan bag). Baris 2: search bar. Baris 3: category tabs. Status bar transparan dengan ikon gelap.
+
+### 3.6 Category Tabs
+
+Scroll horizontal; tiap tab berisi ikon 24 di atas label Caption. Aktif: ikon primary-600, label primary-700 semibold, garis bawah 2 pt primary-600. Inaktif: ikon neutral-600, label neutral-500. Berpindah tab mengganti tema header, banner, dan konten di bawahnya.
+
+### 3.7 Banner dan Pagination
+
+- Kartu `rounded-lg`, tinggi sekitar 140, padding 16; judul Heading, deskripsi Small (putih 90%), tombol “Shop Now” ukuran sm (bg putih, teks primary-700); foto model dipotong di sisi kanan. For You: gradien primary-500 → primary-600 (kiri ke kanan). Beauty: bg peach-300 dengan teks neutral-900.
+- Dots: 6 pt neutral-300; yang aktif memanjang jadi 16 pt primary-600; 8 pt di bawah banner.
+
+### 3.8 Section Header
+
+Judul Section neutral-900 di kiri dan “View All” (Small medium, primary-700) rata kanan. Jarak ke konten 12; antar section 24.
+
+### 3.9 Product Card
+
+- **Horizontal (Saved Items):** thumbnail 72 × 80 `rounded-md`. Di kanan: judul Body medium maks 2 baris; baris rating (bintang warning-500, angka, jumlah ulasan Small neutral-500); baris harga (harga Section bold, harga coret, badge diskon). Heart terisi danger-500 di kanan atas dengan area sentuh 44. Jarak antar item 16.
+- **Vertikal (Flash Sale, Top Rated):** gambar 3:4 `rounded-lg`, badge diskon di kiri atas (offset 8); di bawahnya nama Body medium (1–2 baris), harga, dan rating. Lebar sekitar 140 pada scroll horizontal, atau 2 kolom pada grid.
+- Press: scale 0,98 lalu buka Product Detail. Toggle heart: animasi pop 150 ms dan haptic ringan.
+
+### 3.10 Rating dan Review
+
+- **Rating chip** pada gambar produk: kanan bawah, bg putih 90%, `rounded-sm`, bintang dan angka (Caption bold) dan jumlah ulasan.
+- **Ringkasan:** kotak kiri `rounded-md` bg warning-50 dengan border warning-500 (angka besar 3.9 Heading dan bintang; “500 ratings / 100 reviews” Caption neutral-500). Di kanan lima bar: angka bintang, track neutral-200 tinggi 6 `rounded-full`, isi primary-500, jumlah di ujung kanan.
+- **Galeri foto review:** thumbnail 56 `rounded-md`; thumbnail terakhir diberi overlay neutral-900/60 dengan teks “14+ More”.
+- **Header daftar:** “1K Reviews” (Section) dan dropdown “Most Relevant” dengan chevron-down di kanan.
+- **Item review:** bintang 12 warning-500, teks Small neutral-700 (3 baris lalu Read more), foto 48 opsional, “John Doe · 9 days ago” Caption neutral-500, divider neutral-100.
+
+### 3.11 Cart Item dan Quantity Stepper
+
+- Baris: thumbnail 72 × 80, judul Body medium, “Size: L” Small neutral-500, rating Small, harga Section bold. Kanan atas: trash-2 20 danger-500. Kanan bawah: stepper.
+- Stepper: tombol “−” dan “+” berukuran 28 × 28 dengan border neutral-200 `rounded-md`, angka Body semibold dengan lebar minimal 24 dan rata tengah. Minimum 1; menekan “−” saat jumlah 1 memunculkan konfirmasi hapus. Batasi sesuai stok.
+
+### 3.12 Price Summary dan Sticky Bar
+
+- **Price summary:** kartu `rounded-lg`, bg primary-50, border primary-100, padding 16. Baris label Body neutral-700 di kiri dan nilai Body neutral-900 di kanan (Sub-total, GST atau pajak, Shipping fee), jarak 12; lalu divider; “Total amount” Body bold dan nilainya Section bold.
+- **Sticky bar:** bg putih, `shadow-bar`, padding 16 ditambah inset bawah. Kiri: harga coret (Caption neutral-400) di atas total (Heading bold). Kanan: tombol primary (“Place Order” atau “Continue”) selebar sekitar 140.
+
+### 3.13 Address Card
+
+Label “Delivery Address” (Body semibold) dengan link “Change” di kanan. Kartu `rounded-lg` border neutral-200 padding 12. Di Cart: satu baris (ikon map-pin 16 dan alamat Small neutral-700, dipotong). Di Order Summary: kartu lebih tinggi berisi nama (Body semibold), alamat beberapa baris, dan nomor telepon (Small neutral-500).
+
+### 3.14 Payment Accordion
+
+- Banner total: tinggi 44, `rounded-md`, bg success-100, teks success-700 (“Total Amount” Body medium di kiri, nilai Section bold di kanan).
+- Daftar metode: baris tinggi 52, border-bottom neutral-200, judul Body medium dan chevron. Hanya satu yang terbuka pada satu waktu. Isi yang terbuka: deskripsi Small neutral-500 dan tombol primary “Place Order” full width. Cash on delivery terbuka secara default.
+
+### 3.15 Notification Item
+
+Padding 16. Ikon 20 di dalam lingkaran 36 dengan tint sesuai tipe: Order Confirmed (primary-100 dan primary-600), Order Shipped (success-100 dan success-700), Special Offer (peach-100 dan ikon oranye). Judul Body semibold, isi Small neutral-500 (maks 2 baris), waktu Caption neutral-400 di kanan atas, titik unread 6 pt danger-500. Menu ellipsis di AppBar berisi “Mark all as read”.
+
+### 3.16 Empty State
+
+Konten di tengah layar secara vertikal. Lingkaran 80 bg primary-100, ikon 36 primary-600, jarak 16, judul Subheading, deskripsi Small neutral-500 rata tengah dengan lebar maks 260. CTA primary (jika ada) full width dengan margin 24 dari sisi layar dan jarak 24 di bawah deskripsi.
+
+### 3.17 Dialog Izin Notifikasi
+
+- Overlay neutral-900 50%; kartu putih `rounded-xl`, lebar layar dikurangi 48, padding 20, `shadow-modal`. Ikon bell 40 di atas dengan titik notifikasi danger-500, judul Subheading rata tengah, deskripsi Small neutral-500 rata tengah, lalu dua tombol md sejajar (gap 12): “Don’t Allow” (outline) dan “Allow” (primary).
+- Pola soft-prompt: dialog ini tampil sebelum prompt sistem. Hanya “Allow” yang memanggil prompt sistem; “Don’t Allow” menutup dialog dan tidak muncul lagi sampai ada konteks yang relevan (mis. setelah pesanan pertama).
+
+### 3.18 Bottom Tab Bar
+
+Empat tab: Home, Categories, Cart, Account. Tinggi 64 ditambah inset bawah, bg putih, border-top neutral-100 dan `shadow-bar`. Ikon 24 dan label Caption medium. Aktif: ikon terisi primary-600, label primary-700. Inaktif: ikon outline neutral-400, label neutral-500. Badge jumlah di Cart: bulat 16 danger-500 dengan angka Caption bold putih (tampilkan “99+” jika lebih).
+
+### 3.19 Badge, Chip, dan Divider
+
+- **Badge diskon:** bg primary-600, teks putih Caption bold, padding 6 × 2, `rounded-sm`.
+- **Chip warna (Available Colors):** thumbnail 48 × 56 `rounded-md`, border 1 neutral-200; terpilih: border 2 primary-600 dan bg primary-50.
+- **Divider “or continue with”:** teks Small neutral-500, garis neutral-200 di kiri dan kanan, gap 12, margin vertikal 24.
+
+## 4. Pola Layar dan Alur
+
+| Layar | Route (Expo Router) | Komponen kunci | State |
+| --- | --- | --- | --- |
+| Onboarding | `/(auth)/onboarding` | Hero image, headline Display, Button | — |
+| Sign In | `/(auth)/sign-in` | Input ×2, Button, Divider, Social ×2 | default, error, loading |
+| Create Account | `/(auth)/sign-up` | Input ×3, Button, Divider, Social ×2 | default, error |
+| Forgot Password | `/(auth)/forgot-password` | AppBar auth, Input, Button | kosong, terisi |
+| Enter Code | `/(auth)/verify-code` | OTP ×4, link Resend | normal, salah, timer |
+| Reset Password | `/(auth)/reset-password` | Input ×2 (password dan konfirmasi), Button | default, error |
+| Home | `/(tabs)/index` | HomeHeader, SearchBar, CategoryTabs, Banner, Featured, Flash Sale | tema kategori, dialog notifikasi |
+| Search | `/search` | SearchBar, Recent, Trending, Suggestion list | awal, mengetik, tanpa hasil |
+| Notifications | `/notifications` | AppBar, NotificationItem | berisi, kosong |
+| Saved Items | `/saved` | AppBar, ProductCard horizontal | berisi, kosong |
+| Product Detail | `/product/[id]` | Carousel gambar, rating chip, chip warna, sticky CTA | default |
+| Reviews | `/product/[id]/reviews` | Ringkasan, RatingBar, galeri, ReviewItem | default |
+| Cart | `/(tabs)/cart` | Address, CartItem, PriceSummary, StickyBar | berisi, kosong |
+| Order Summary | `/checkout/summary` | AddressCard, CartItem (read-only), PriceSummary | default |
+| Payment | `/checkout/payment` | Banner total, accordion metode | default |
+
+Tab Categories dan Account ada di tab bar tetapi belum didesain di kit.
+
+**Alur utama.** Auth: Onboarding → Sign In ⇄ Create Account; Sign In → Forgot Password → Enter Code → Reset Password → Sign In. Belanja: Home → Search atau Product Detail → Cart → Order Summary → Payment → (Order Success: belum ada di kit).
+
+**Pola layar auth:**
+
+- Judul Title dan subjudul Small neutral-500 di kiri atas, jarak 24 dari bawah status bar atau AppBar.
+- Urutan: form → tombol primary full width → divider “or continue with” → dua tombol social bertumpuk (gap 12).
+- Teks navigasi akun (“Don’t have an account? Sign Up” atau “Already have an account? Sign In”) rata tengah dan menempel di bawah, di atas safe area.
+- Layar dengan satu CTA (Forgot Password, Enter Code, Reset Password) menempelkan tombol full width di bawah dan ikut naik di atas keyboard (`KeyboardAvoidingView`).
+- Error submit: border field merah dan pesan di bawah field; fokus kembali ke field bermasalah; jangan menghapus isi field email.
+
+## 5. State dan Feedback
+
+Empty state memakai copy asli dari kit:
+
+| Layar | Ikon | Judul | Deskripsi | CTA |
+| --- | --- | --- | --- | --- |
+| Notifications | bell-off | No Notifications Yet! | You don’t have any notifications right now. We’ll notify you when something arrives. | Browse Products |
+| Search | search | No Results Found! | Try a similar word or something more general. | — |
+| Saved Items | heart | No Saved Items! | You don’t have any saved items. Go to home and add some. | — |
+| Cart | shopping-basket | Your cart is empty | You don’t have any products right now. | Shop Now |
+
+- **Loading:** skeleton yang meniru layout asli (bukan spinner layar penuh); pull-to-refresh memakai spinner primary-600.
+- **Error jaringan:** pakai pola empty state dengan ikon wifi-off dan tombol “Try Again” (belum ada di kit).
+- **Feedback ringan:** toast di atas sticky bar, bg neutral-900, teks putih Small, `rounded-md`, hilang setelah 3 dtk (belum ada di kit).
+
+## 6. Lokalisasi untuk Indonesia (saran)
+
+Kit memakai rupee, GST, dan UPI. Untuk pasar Indonesia saya sarankan penyesuaian berikut.
+
+| Di kit | Saran |
+| --- | --- |
+| ₹2,070 | Rp 2.070.000 (contoh); format dengan `Intl.NumberFormat` locale `id-ID`, tanpa desimal |
+| GST (%) | PPN, bila memang ditampilkan terpisah |
+| Shipping fee | Ongkos kirim, dengan estimasi tiba dan pilihan kurir |
+| COD, UPI, Credit/Debit/ATM Card, EMI | COD, QRIS, Virtual Account bank, e-wallet (mis. GoPay, OVO, DANA), kartu, cicilan |
+| Alamat Sardar Nagar, Limbayat, Surat | Nama penerima, telepon, provinsi, kota atau kabupaten, kecamatan, kode pos, detail alamat, patokan |
+| 2m ago, 9 days ago | 2 mnt lalu, 9 hari lalu; tanggal absolut 23 Okt 2026 |
+
+Simpan semua copy UI di file i18n (mis. `i18next` dan `expo-localization`) sejak awal, bukan menuliskannya langsung di komponen.
+
+## 7. Aksesibilitas
+
+- Target sentuh minimal 44 × 44 pt. Perluas dengan `hitSlop` pada ikon 20–24 (heart, trash, eye, x).
+- Setiap tombol ikon wajib punya `accessibilityLabel` dan `accessibilityRole` (mis. “Tambah ke wishlist”, “Hapus dari keranjang”).
+- Jangan menyampaikan status hanya lewat warna: error = border merah + teks pesan; tab aktif = warna + garis bawah atau ikon terisi; unread = dot + judul tebal.
+- **Koreksi kontras untuk pesan error:** danger-500 (#EF4444) hanya 3,8:1 di atas putih, cukup untuk border dan ikon tetapi tidak untuk teks 12 pt. Teks pesan error memakai **danger-700 (#B91C1C, 6,5:1)**; ini menggantikan penyebutan danger-500 untuk teks pesan di bagian 3.2 dan 3.3. Border tetap danger-500.
+- Stepper kuantitas: beri label pada tombol − dan + serta umumkan nilai baru setelah berubah.
+- Teks di atas gambar (banner, badge) harus berada di atas overlay atau background solid.
+- Dialog menjebak fokus (`accessibilityViewIsModal`); urutan fokus mengikuti urutan visual.
+- Dukung font scale hingga 130% tanpa teks terpotong; uji juga 200% pada layar auth.
+- Hormati Reduce Motion: matikan auto-play carousel atau sediakan tombol jeda.
+
+## 8. Implementasi di React Native + NativeWind
+
+Asumsi: Expo, NativeWind v4, TypeScript. Selesaikan dulu setup NativeWind v4 (babel preset, konfigurasi Metro, `global.css`) sesuai dokumentasi resminya.
+
+### 8.1 tailwind.config.js
+
+```js
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: ["./app/**/*.{ts,tsx}", "./src/**/*.{ts,tsx}"],
+  presets: [require("nativewind/preset")],
+  theme: {
+    extend: {
+      colors: {
+        primary: {
+          50: "#F0F9FF", 100: "#E0F2FE", 200: "#BAE6FD", 300: "#7DD3FC", 400: "#38BDF8",
+          500: "#0EA5E9", 600: "#0284C7", 700: "#0369A1", 800: "#075985", 900: "#0C4A6E",
+        },
+        neutral: {
+          50: "#F8FAFC", 100: "#F1F5F9", 200: "#E2E8F0", 300: "#CBD5E1", 400: "#94A3B8",
+          500: "#64748B", 600: "#475569", 700: "#334155", 800: "#1E293B", 900: "#0F172A",
+        },
+        success: { 50: "#F0FDF4", 100: "#DCFCE7", 500: "#22C55E", 700: "#15803D" },
+        warning: { 50: "#FFFBEB", 100: "#FEF3C7", 500: "#F59E0B", 700: "#B45309" },
+        danger: { 50: "#FEF2F2", 100: "#FEE2E2", 500: "#EF4444", 700: "#B91C1C" },
+        peach: { 100: "#FFEDD5", 200: "#FED7AA", 300: "#FDBA74" },
+      },
+      fontFamily: {
+        inter: ["Inter_400Regular"],
+        "inter-medium": ["Inter_500Medium"],
+        "inter-semibold": ["Inter_600SemiBold"],
+        "inter-bold": ["Inter_700Bold"],
+      },
+      fontSize: {
+        caption: ["10px", "14px"],
+        xs: ["12px", "16px"],
+        sm: ["14px", "20px"],
+        base: ["16px", "24px"],
+        lg: ["18px", "24px"],
+        xl: ["20px", "26px"],
+        "2xl": ["24px", "30px"],
+        "4xl": ["32px", "38px"],
+      },
+      borderRadius: { sm: "6px", md: "8px", lg: "12px", xl: "16px", "2xl": "24px" },
+      boxShadow: {
+        bar: "0 -2px 8px rgba(15,23,42,0.06)",
+        float: "0 2px 8px rgba(15,23,42,0.12)",
+        modal: "0 8px 24px rgba(15,23,42,0.20)",
+      },
+    },
+  },
+  plugins: [],
+};
+```
+
+Catatan: (1) Pakai `font-inter-*`, jangan `font-semibold` bawaan, karena di React Native font kustom tidak memilih berkas bobot yang benar lewat `fontWeight`. (2) NativeWind menerjemahkan `shadow-*` ke shadow props iOS dan elevation Android; jika token `boxShadow` kustom tidak terbaca di versi Anda, pakai `shadow-sm` atau `shadow-md` bawaan, atau `StyleSheet`.
+
+### 8.2 Memuat font
+
+```tsx
+// app/_layout.tsx
+import { useEffect } from "react";
+import { Slot } from "expo-router";
+import * as SplashScreen from "expo-splash-screen";
+import { useFonts, Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold } from "@expo-google-fonts/inter";
+import "../global.css";
+
+SplashScreen.preventAutoHideAsync();
+
+export default function RootLayout() {
+  const [loaded] = useFonts({ Inter_400Regular, Inter_500Medium, Inter_600SemiBold, Inter_700Bold });
+  useEffect(() => { if (loaded) SplashScreen.hideAsync(); }, [loaded]);
+  if (!loaded) return null;
+  return <Slot />;
+}
+```
+
+### 8.3 Button
+
+```tsx
+// src/components/ui/Button.tsx
+import type { ReactNode } from "react";
+import { ActivityIndicator, Pressable, Text } from "react-native";
+
+type Variant = "primary" | "outline" | "social" | "ghost";
+type Size = "lg" | "md" | "sm";
+type Props = {
+  title: string;
+  onPress?: () => void;
+  variant?: Variant;
+  size?: Size;
+  icon?: ReactNode;
+  loading?: boolean;
+  disabled?: boolean;
+  className?: string;
+};
+
+const boxCls: Record<Variant, string> = {
+  primary: "bg-primary-600 active:bg-primary-700",
+  outline: "bg-white border border-primary-600 active:bg-primary-50",
+  social: "bg-white border border-neutral-200 active:bg-neutral-50",
+  ghost: "bg-transparent",
+};
+const textCls: Record<Variant, string> = {
+  primary: "text-white",
+  outline: "text-primary-700",
+  social: "text-neutral-900",
+  ghost: "text-primary-700",
+};
+const sizeCls: Record<Size, string> = { lg: "h-12 px-5", md: "h-10 px-4", sm: "h-8 px-3" };
+const labelCls: Record<Size, string> = {
+  lg: "text-base font-inter-semibold",
+  md: "text-sm font-inter-semibold",
+  sm: "text-xs font-inter-semibold",
+};
+
+export function Button({ title, onPress, variant = "primary", size = "lg", icon, loading, disabled, className = "" }: Props) {
+  const off = disabled || loading;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !!off, busy: !!loading }}
+      disabled={off}
+      onPress={onPress}
+      className={`flex-row items-center justify-center gap-2 rounded-md ${sizeCls[size]} ${boxCls[variant]} ${off ? "opacity-50" : ""} ${className}`}
+    >
+      {loading ? (
+        <ActivityIndicator color={variant === "primary" ? "#FFFFFF" : "#0284C7"} />
+      ) : (
+        <>
+          {icon}
+          <Text className={`${labelCls[size]} ${textCls[variant]}`}>{title}</Text>
+        </>
+      )}
+    </Pressable>
+  );
+}
+```
+
+### 8.4 Input
+
+```tsx
+// src/components/ui/Input.tsx
+import { useState } from "react";
+import { Pressable, Text, TextInput, TextInputProps, View } from "react-native";
+import { Eye, EyeOff } from "lucide-react-native";
+
+type Props = TextInputProps & { label: string; error?: string; password?: boolean };
+
+export function Input({ label, error, password, ...rest }: Props) {
+  const [hidden, setHidden] = useState(!!password);
+  const [focused, setFocused] = useState(false);
+  const border = error ? "border-danger-500" : focused ? "border-primary-500" : "border-neutral-200";
+
+  return (
+    <View className="gap-1.5">
+      <Text className="font-inter-medium text-sm text-neutral-900">{label}</Text>
+      <View className={`h-12 flex-row items-center rounded-md border bg-white px-3 ${border}`}>
+        <TextInput
+          {...rest}
+          secureTextEntry={hidden}
+          placeholderTextColor="#94A3B8"
+          accessibilityLabel={label}
+          onFocus={(e) => { setFocused(true); rest.onFocus?.(e); }}
+          onBlur={(e) => { setFocused(false); rest.onBlur?.(e); }}
+          className="flex-1 font-inter text-sm text-neutral-900"
+        />
+        {password && (
+          <Pressable
+            hitSlop={12}
+            onPress={() => setHidden((h) => !h)}
+            accessibilityRole="button"
+            accessibilityLabel={hidden ? "Tampilkan password" : "Sembunyikan password"}
+          >
+            {hidden ? <EyeOff size={20} color="#94A3B8" /> : <Eye size={20} color="#94A3B8" />}
+          </Pressable>
+        )}
+      </View>
+      {error ? <Text className="font-inter text-xs text-danger-700">{error}</Text> : null}
+    </View>
+  );
+}
+```
+
+### 8.5 Struktur folder dan utilitas
+
+```
+src/
+├─ components/
+│  ├─ ui/        Button, Input, OtpInput, Badge, Chip, Divider, EmptyState, Dialog, Accordion, Stepper
+│  ├─ commerce/  ProductCard, CartItem, PriceSummary, RatingBars, ReviewItem, AddressCard, StickyBar
+│  └─ layout/    AppBar, HomeHeader, CategoryTabs, BottomTabBar
+├─ lib/format.ts
+└─ theme/tokens.ts   // hex untuk prop yang tidak bisa memakai className (ikon, gradient, spinner)
+```
+
+```ts
+// src/lib/format.ts
+export const rupiah = (n: number) =>
+  new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(n);
+
+// src/theme/tokens.ts
+export const colors = {
+  primary50: "#F0F9FF", primary200: "#BAE6FD", primary600: "#0284C7",
+  neutral400: "#94A3B8", danger500: "#EF4444",
+} as const;
+```
+
+Header Home memakai `expo-linear-gradient`: `colors={[colors.primary200, colors.primary50, "#FFFFFF"]}`.
+
+## 9. Catatan, Asumsi, dan Checklist
+
+**Asumsi dan celah di UI kit**
+
+- Biru diturunkan dari skala Sky Tailwind. Jika brand Anda punya hex spesifik, ganti sepuluh nilai `primary` lalu cek ulang kontras untuk primary-600 dan primary-700.
+- Kit tidak memuat: Categories, Account/Profile, daftar produk dengan filter dan sort, form alamat, Order Success dan tracking, state error jaringan, toast, dan dark mode. Rancang layar-layar ini dari komponen di dokumen ini.
+- Ukuran adalah estimasi dari gambar, bukan dari file desain asli.
+- Foto, ilustrasi, dan logo di kit tidak ikut dikonversi; hanya warna dan sistem desainnya.
+
+**Checklist sebelum merge UI baru**
+
+1. Hanya memakai token; tidak ada hex yang ditulis langsung di komponen (kecuali lewat `theme/tokens.ts`).
+2. Satu tombol primary per layar.
+3. Layar berisi data punya empty, loading, dan error state.
+4. Target sentuh minimal 44 pt dan label aksesibilitas terpasang.
+5. Teks kecil di atas putih memakai primary-700, neutral-500 atau lebih gelap, dan danger-700 untuk pesan error.
+6. Sticky bar dan tab bar memakai inset safe area.
+7. Diuji di iOS dan Android, lebar 360 pt, dan font scale 130%.
