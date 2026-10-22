@@ -253,7 +253,7 @@ export default function AddressListScreen() {
                       <Pressable
                         onPress={() => router.push(`/addresses/edit/${alamat.id}`)}
                         accessibilityRole="button"
-                        accessibilityLabel={`${teks.alamat.tambahBaru} — ${teks.umum.ubah} ${alamat.label}`}
+                        accessibilityLabel={`${teks.umum.ubah} ${alamat.label}`}
                         hitSlop={sizes.hitSlop}
                         className="items-center justify-center rounded-md active:bg-neutral-100"
                         style={{ width: sizes.minTouchTarget, height: sizes.minTouchTarget }}
