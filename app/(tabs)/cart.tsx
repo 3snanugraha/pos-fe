@@ -12,7 +12,7 @@ import {
   StickyTotal,
 } from "../../src/components/commerce";
 import { AppBar } from "../../src/components/layout";
-import { Button, EmptyState } from "../../src/components/ui";
+import { Button, Dialog, EmptyState } from "../../src/components/ui";
 import { rupiah } from "../../src/lib/format";
 import { teks } from "../../src/lib/i18n";
 import { colors } from "../../src/theme/tokens";
@@ -46,6 +46,12 @@ export default function CartScreen() {
   const [memuatAlamat, setMemuatAlamat] = useState(true);
   const [galatAlamat, setGalatAlamat] = useState<string | null>(null);
   const [menyegarkan, setMenyegarkan] = useState(false);
+  /**
+   * Baris yang menunggu konfirmasi hapus. Tombol trash di baris item dulu
+   * langsung menghapus tanpa dialog; dialog konfirmasi sudah ada di i18n dan
+   * dipakai Stepper, jadi aksi hapus harus lewat jalur yang sama.
+   */
+  const [hapusMenunggu, setHapusMenunggu] = useState<CartItem | null>(null);
 
   const ambilAlamat = async () => {
     try {
@@ -201,7 +207,7 @@ export default function CartScreen() {
                     }
                     onPress={() => router.push(`/product/${item.produk_id}`)}
                     onChangeJumlah={(next) => ubahJumlah(item, next)}
-                    onHapus={() => removeItem(item.id)}
+                    onHapus={() => setHapusMenunggu(item)}
                   />
                 ))}
               </View>
@@ -231,6 +237,40 @@ export default function CartScreen() {
           </StickyBar>
         </>
       )}
+
+      {/* Konfirmasi hapus item — satu jalur untuk tombol trash dan stepper. */}
+      <Dialog
+        visible={hapusMenunggu !== null}
+        onClose={() => setHapusMenunggu(null)}
+        title={teks.dialog.hapusItem.judul}
+        description={
+          hapusMenunggu
+            ? `${hapusMenunggu.nama_produk} — ${teks.dialog.hapusItem.deskripsi}`
+            : teks.dialog.hapusItem.deskripsi
+        }
+        actions={
+          <>
+            <Button
+              title={teks.dialog.hapusItem.batal}
+              variant="outline"
+              size="md"
+              className="flex-1"
+              onPress={() => setHapusMenunggu(null)}
+            />
+            <Button
+              title={teks.dialog.hapusItem.ya}
+              variant="primary"
+              size="md"
+              className="flex-1"
+              onPress={() => {
+                const target = hapusMenunggu;
+                setHapusMenunggu(null);
+                if (target) removeItem(target.id);
+              }}
+            />
+          </>
+        }
+      />
     </SafeAreaView>
   );
 }
