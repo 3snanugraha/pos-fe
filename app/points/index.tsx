@@ -10,11 +10,12 @@ import {
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ErrorState, Skeleton } from "../../src/components/commerce";
 import { AppBar } from "../../src/components/layout";
 import { EmptyState } from "../../src/components/ui";
 import { angka, rupiah, waktuRelatif } from "../../src/lib/format";
+import { paddingBawahKonten } from "../../src/lib/inset";
 import { teks } from "../../src/lib/i18n";
 import { colors } from "../../src/theme/tokens";
 import { apiService } from "../../services/apiService";
@@ -123,6 +124,7 @@ const keMs = (value?: string | number | null): number | null => {
  */
 export default function PointsHistoryScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [baris, setBaris] = useState<PointRow[]>([]);
   const [profil, setProfil] = useState<CustomerProfile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -224,7 +226,10 @@ export default function PointsHistoryScreen() {
       ) : (
         <ScrollView
           className="flex-1"
-          contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+          contentContainerStyle={{
+            padding: 16,
+            paddingBottom: paddingBawahKonten(insets, 32),
+          }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

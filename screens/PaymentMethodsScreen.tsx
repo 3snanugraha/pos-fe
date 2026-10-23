@@ -8,11 +8,12 @@ import {
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ErrorState, Skeleton } from "../src/components/commerce";
 import { AppBar } from "../src/components/layout";
 import { EmptyState } from "../src/components/ui";
 import { rupiah } from "../src/lib/format";
+import { paddingBawahKonten } from "../src/lib/inset";
 import { teks } from "../src/lib/i18n";
 import { colors } from "../src/theme/tokens";
 import { apiService } from "../services/apiService";
@@ -50,6 +51,7 @@ const ikonJenis = (jenis?: string | null) => {
  */
 export default function PaymentMethodsScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [metode, setMetode] = useState<PaymentMethod[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -132,7 +134,10 @@ export default function PaymentMethodsScreen() {
       ) : (
         <ScrollView
           className="flex-1"
-          contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+          contentContainerStyle={{
+            padding: 16,
+            paddingBottom: paddingBawahKonten(insets, 32),
+          }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

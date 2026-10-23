@@ -10,7 +10,7 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppBar } from "../../src/components/layout";
 import {
   EmptyState,
@@ -19,6 +19,7 @@ import {
 import { ProductCardGrid } from "../../src/components/commerce";
 import { SearchBar } from "../../src/components/commerce/SearchBar";
 import { SkeletonGridProduk } from "../../src/components/commerce/Skeleton";
+import { paddingBawahKonten } from "../../src/lib/inset";
 import { teks } from "../../src/lib/i18n";
 import { useRiwayatPencarian } from "../../src/lib/riwayatPencarian";
 import { colors, sizes } from "../../src/theme/tokens";
@@ -60,6 +61,7 @@ const SORT_OPTIONS = [
  */
 export default function SearchScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const initialQuery = typeof params.query === "string" ? params.query : "";
 
@@ -350,7 +352,7 @@ export default function SearchScreen() {
       {modeAwal ? (
         <ScrollView
           className="flex-1"
-          contentContainerStyle={{ paddingBottom: 24 }}
+          contentContainerStyle={{ paddingBottom: paddingBawahKonten(insets) }}
           keyboardShouldPersistTaps="handled"
         >
           {/* Recent searches — judul + "Hapus Semua" + avatar bulat 48. */}

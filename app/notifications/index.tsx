@@ -2,10 +2,11 @@ import { BellOff, CheckCheck } from "lucide-react-native";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ErrorState, NotificationItem, Skeleton } from "../../src/components/commerce";
 import { AppBar } from "../../src/components/layout";
 import { Button, Dialog, EmptyState } from "../../src/components/ui";
+import { paddingBawahKonten } from "../../src/lib/inset";
 import { teks } from "../../src/lib/i18n";
 import { colors } from "../../src/theme/tokens";
 import { apiService } from "../../services/apiService";
@@ -25,6 +26,7 @@ import { getErrorMessage, handleAuthError } from "../../utils/auth";
  */
 const NotificationsScreen = () => {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -191,7 +193,7 @@ const NotificationsScreen = () => {
           ) : (
             <ScrollView
               className="flex-1"
-              contentContainerStyle={{ paddingBottom: 16 }}
+              contentContainerStyle={{ paddingBottom: paddingBawahKonten(insets, 16) }}
               refreshControl={
                 <RefreshControl
                   refreshing={refreshing}

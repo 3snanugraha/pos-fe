@@ -2,7 +2,7 @@ import { Heart } from "lucide-react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ErrorState,
   ProductCardHorizontal,
@@ -10,6 +10,7 @@ import {
 } from "../../src/components/commerce";
 import { AppBar } from "../../src/components/layout";
 import { Button, Dialog, EmptyState } from "../../src/components/ui";
+import { paddingBawahKonten } from "../../src/lib/inset";
 import { teks } from "../../src/lib/i18n";
 import type { ProdukApi } from "../../src/lib/produk";
 import { colors } from "../../src/theme/tokens";
@@ -58,6 +59,7 @@ function keProduk(row: BackendWishlistItem): ProdukApi {
  */
 const WishlistScreen = () => {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { addItem } = useCart();
   const [wishlistItems, setWishlistItems] = useState<BackendWishlistItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -221,7 +223,7 @@ const WishlistScreen = () => {
       ) : (
         <ScrollView
           className="flex-1"
-          contentContainerStyle={{ paddingBottom: 16 }}
+          contentContainerStyle={{ paddingBottom: paddingBawahKonten(insets, 16) }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

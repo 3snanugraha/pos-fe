@@ -18,7 +18,7 @@ import {
   Text,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import {
   ErrorState,
   OrderTimeline,
@@ -29,6 +29,7 @@ import {
 import { AppBar } from "../../src/components/layout";
 import { Button, Dialog } from "../../src/components/ui";
 import { rupiah, tanggalWaktu } from "../../src/lib/format";
+import { paddingBawahKonten } from "../../src/lib/inset";
 import { teks } from "../../src/lib/i18n";
 import {
   bisaDibatalkan,
@@ -66,6 +67,7 @@ type DialogBatal = "konfirmasi" | null;
 export default function OrderDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [order, setOrder] = useState<OrderDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -300,7 +302,10 @@ export default function OrderDetailScreen() {
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ padding: 16, paddingBottom: 32 }}
+        contentContainerStyle={{
+          padding: 16,
+          paddingBottom: paddingBawahKonten(insets, 32),
+        }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

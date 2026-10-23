@@ -2,11 +2,12 @@ import { Receipt } from "lucide-react-native";
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ErrorState, OrderCard, Skeleton } from "../../src/components/commerce";
 import { AppBar } from "../../src/components/layout";
 import { Button, Dialog, EmptyState } from "../../src/components/ui";
 import { teks } from "../../src/lib/i18n";
+import { paddingBawahKonten } from "../../src/lib/inset";
 import { colors } from "../../src/theme/tokens";
 import { useCart } from "../../contexts/CartContext";
 import { apiService } from "../../services/apiService";
@@ -36,6 +37,7 @@ type Pesan = { tipe: "sukses" | "gagal"; isi: string } | null;
  */
 export default function OrderHistoryScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const { addItem } = useCart();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
@@ -253,7 +255,11 @@ export default function OrderHistoryScreen() {
       ) : (
         <ScrollView
           className="flex-1"
-          contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 16 }}
+          contentContainerStyle={{
+            paddingHorizontal: 16,
+            paddingVertical: 16,
+            paddingBottom: paddingBawahKonten(insets, 16),
+          }}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}

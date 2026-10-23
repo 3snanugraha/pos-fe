@@ -18,11 +18,12 @@ import {
   TextInput,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ErrorState, Skeleton, StickyBar } from "../../src/components/commerce";
 import { AppBar } from "../../src/components/layout";
 import { Button, EmptyState, Input } from "../../src/components/ui";
 import { rupiah, tanggalWaktu } from "../../src/lib/format";
+import { paddingBawahKonten } from "../../src/lib/inset";
 import { teks } from "../../src/lib/i18n";
 import { colors, sizes } from "../../src/theme/tokens";
 import {
@@ -69,6 +70,7 @@ interface KasirOrder {
  */
 export default function KasirOrdersScreen() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const [staff, setStaff] = useState<StaffUser | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [email, setEmail] = useState("");
@@ -377,7 +379,7 @@ export default function KasirOrdersScreen() {
 
       <ScrollView
         className="flex-1"
-        contentContainerStyle={{ padding: 16, paddingBottom: 24 }}
+        contentContainerStyle={{ padding: 16, paddingBottom: paddingBawahKonten(insets) }}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}

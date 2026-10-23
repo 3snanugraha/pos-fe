@@ -2,11 +2,12 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { ChevronDown, MessageSquare, Star } from "lucide-react-native";
 import { useMemo, useState } from "react";
 import { Image, Pressable, ScrollView, Text, View } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { AppBar } from "../../../src/components/layout";
 import { EmptyState } from "../../../src/components/ui";
 import { SkeletonBaris } from "../../../src/components/commerce/Skeleton";
 import { waktuRelatif } from "../../../src/lib/format";
+import { paddingBawahKonten } from "../../../src/lib/inset";
 import { teks } from "../../../src/lib/i18n";
 import { formatRating } from "../../../src/lib/produk";
 import { useUlasanProduk } from "../../../src/screens/produk/useUlasanProduk";
@@ -36,6 +37,7 @@ const LABEL_URUT: Record<OpsiUrut, string> = {
 export default function ReviewsScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const idProduk = Number(params.id);
   const { ulasan, ringkasan, status } = useUlasanProduk(
     Number.isFinite(idProduk) && idProduk > 0 ? idProduk : null,
@@ -83,7 +85,7 @@ export default function ReviewsScreen() {
       ) : (
         <ScrollView
           className="flex-1"
-          contentContainerStyle={{ paddingBottom: 24 }}
+          contentContainerStyle={{ paddingBottom: paddingBawahKonten(insets) }}
           showsVerticalScrollIndicator={false}
         >
           {/* Ringkasan rating — kotak warning-50 + 5 bar distribusi. */}
