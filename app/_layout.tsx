@@ -9,8 +9,10 @@ import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
+import { View } from "react-native";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { CartProvider } from "../contexts/CartContext";
+import { NotifikasiGlobal } from "../src/components/notifikasi/NotifikasiGlobal";
 import { RealtimeProvider } from "../src/lib/realtime/RealtimeProvider";
 import { colors } from "../src/theme/tokens";
 import installWebAlert from "../utils/webAlert";
@@ -51,13 +53,21 @@ export default function RootLayout() {
             layar mana pun, bukan hanya saat layar notifikasi dibuka. */}
         <RealtimeProvider>
           <StatusBar style="dark" />
-          <Stack
-            screenOptions={{
-              headerShown: false,
-              contentStyle: { backgroundColor: colors.neutral50 },
-              animation: "slide_from_right",
-            }}
-          />
+          {/* Pembungkus flex-1: toast global butuh induk berukuran penuh agar
+              `position: absolute`-nya menempel di atas Stack, di rute mana pun
+              (bukan hanya di dalam satu layar). */}
+          <View className="flex-1">
+            <Stack
+              screenOptions={{
+                headerShown: false,
+                contentStyle: { backgroundColor: colors.neutral50 },
+                animation: "slide_from_right",
+              }}
+            />
+            {/* Toast 'Order Baru' + navigasi ke layar terkait; hidup di root
+                supaya tampil di SEMUA rute, tidak hanya /kasir/orders. */}
+            <NotifikasiGlobal />
+          </View>
         </RealtimeProvider>
       </CartProvider>
     </ErrorBoundary>

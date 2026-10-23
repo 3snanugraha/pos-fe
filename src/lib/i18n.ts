@@ -388,6 +388,11 @@ export const teks = {
     realtimeAktif: "Realtime aktif",
     realtimeGagal: "Notifikasi langsung tidak aktif",
     baru: "baru",
+    // Toast global (di luar layar notifikasi) — lihat NotifikasiGlobal.
+    bukaToast: "Buka notifikasi",
+    suaraMati: "Suara notifikasi mati",
+    aktifkanSuara: "Aktifkan suara notifikasi",
+    orderBaru: "Order Baru",
   },
 
   /** Dialog izin notifikasi (soft-prompt, guideline §3.17). */
