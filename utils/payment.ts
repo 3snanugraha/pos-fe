@@ -10,14 +10,7 @@ import { API_CONFIG } from "../services/config";
  * - Poin: 1 poin = Rp 1, maksimal sebesar saldo pelanggan.
  */
 
-export type PaymentJenis =
-  | "tunai"
-  | "transfer"
-  | "kartu"
-  | "ewallet"
-  | "kredit"
-  | "cicilan"
-  | string;
+export type PaymentJenis = string;
 
 export const RUPIAH_PER_POIN = 1;
 
@@ -49,55 +42,17 @@ export const JENIS_LABEL: Record<string, string> = {
 export const jenisLabel = (jenis?: PaymentJenis | null): string =>
   JENIS_LABEL[(jenis ?? "").toLowerCase()] ?? (jenis || "Lainnya");
 
-/**
- * Instruksi pembayaran untuk pelanggan.
- *
- * Backend tidak punya kolom `instruksi`; bila ada dipakai apa adanya,
- * selain itu instruksi disusun dari jenis pembayaran + rekening tujuan.
- */
-export const buildPaymentInstruction = (metode: {
-  nama_metode: string;
-  jenis_pembayaran?: PaymentJenis | null;
-  nomor_rekening?: string | null;
-  atas_nama?: string | null;
-  instruksi?: string | null;
-}): string[] => {
-  const lines: string[] = [];
-  const jenis = (metode.jenis_pembayaran ?? "").toLowerCase();
+// Normalisasi bentuk metode pembayaran dipisah ke modul bebas-dependensi
+// (utils/metodePembayaran.ts) agar bisa diuji `node --test` tanpa React Native.
+// Diekspor ulang di sini supaya layar cukup mengimpor dari satu tempat.
+export {
+  punyaNomorTujuan,
+  normalisasiMetodePembayaran,
+  type MetodePembayaranRingkas,
+} from "./metodePembayaran";
 
-  if (metode.instruksi && metode.instruksi.trim() !== "") {
-    lines.push(metode.instruksi.trim());
-  }
-
-  if (jenis === "transfer") {
-    if (metode.nomor_rekening) {
-      lines.push(
-        `Transfer ke ${metode.nama_metode} — No. Rekening ${metode.nomor_rekening}` +
-          (metode.atas_nama ? ` a.n. ${metode.atas_nama}` : "")
-      );
-    } else {
-      lines.push(
-        "Nomor rekening belum diatur admin. Silakan hubungi toko untuk detail rekening tujuan."
-      );
-    }
-    lines.push(
-      "Cantumkan nomor pesanan pada berita transfer, lalu kirim bukti transfer ke kasir."
-    );
-  } else if (jenis === "ewallet") {
-    lines.push(`Bayar menggunakan ${metode.nama_metode} ke nomor/akun toko.`);
-    lines.push("Tunjukkan bukti pembayaran saat verifikasi kasir.");
-  } else if (jenis === "kartu") {
-    lines.push(`Pembayaran dengan ${metode.nama_metode} diproses saat verifikasi kasir.`);
-  } else if (jenis === "tunai") {
-    lines.push("Pembayaran tunai dilakukan di toko saat pesanan diambil/diverifikasi.");
-  } else if (jenis === "kredit" || jenis === "cicilan") {
-    lines.push("Pembayaran tempo/kredit akan dicatat oleh kasir saat verifikasi.");
-  } else if (lines.length === 0) {
-    lines.push("Ikuti instruksi dari kasir untuk menyelesaikan pembayaran.");
-  }
-
-  return lines;
-};
+// Instruksi pembayaran juga dipisah agar bebas dependensi & bisa diuji.
+export { buildPaymentInstruction } from "./instruksiPembayaran";
 
 /** Sisa tagihan setelah pembayaran campuran. */
 export const hitungSisaPembayaran = (total: number, nominal: number[]): number =>

@@ -216,6 +216,21 @@ export interface Banner {
 }
 
 // Order Types
+
+/**
+ * Bentuk `metode_pembayaran` pada respons order pelanggan (create/show/list).
+ * Sumbernya tabel `metode_pembayaran`; `nomor_rekening`/`atas_nama` null untuk
+ * metode tanpa nomor tujuan (mis. Tunai).
+ */
+export interface MetodePembayaranOrder {
+  id: number | null;
+  nama: string;
+  jenis: string | null;
+  nomor_rekening?: string | null;
+  atas_nama?: string | null;
+  instruksi?: string | null;
+}
+
 export interface Order {
   id: number;
   nomor_order?: string;
@@ -242,8 +257,15 @@ export interface Order {
   
   // Relations
   items: OrderItem[];
-  /** List endpoint mengirim nama metode (string); detail mengirim objek. */
-  metode_pembayaran?: PaymentMethod | string | null;
+  /**
+   * `POST/GET /api/customer/orders` sekarang mengirim objek
+   * `{ id, nama, jenis, nomor_rekening, atas_nama }`; respons lama/endpoint lain
+   * masih bisa mengirim string nama metode. Keduanya diterima, dinormalisasi
+   * lewat `normalisasiMetodePembayaran()` (utils/payment).
+   */
+  metode_pembayaran?: MetodePembayaranOrder | PaymentMethod | string | null;
+  /** Nama metode sebagai string — selalu ada, untuk konsumen lama. */
+  metode_pembayaran_nama?: string | null;
   customer?: CustomerProfile;
   
   // Status tracking
@@ -281,14 +303,7 @@ export interface OrderDetail {
   status_transaksi?: string;
   status_pembayaran?: string;
   order_expires_at?: string | null;
-  metode_pembayaran?: {
-    id: number | null;
-    nama: string;
-    jenis: string;
-    nomor_rekening?: string | null;
-    atas_nama?: string | null;
-    instruksi?: string | null;
-  };
+  metode_pembayaran?: MetodePembayaranOrder;
   alamat_pengiriman?: string | null;
   catatan?: string | null;
   created_at: string;

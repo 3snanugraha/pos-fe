@@ -9,6 +9,7 @@ import {
   formatDateTime,
   useOrderExpiry,
 } from "../../../utils/orderExpiry";
+import { normalisasiMetodePembayaran } from "../../../utils/payment";
 import { Button } from "../ui/Button";
 import { StatusBadge } from "./StatusBadge";
 
@@ -21,14 +22,17 @@ export type OrderCardProps = {
   className?: string;
 };
 
-const namaMetode = (metode: Order["metode_pembayaran"]): string => {
-  if (!metode) return "-";
-  if (typeof metode === "string") return metode;
-  // Backend list mengirim string; detail mengirim objek dengan `nama`
-  // (OrderDetail) atau `nama_metode` (PaymentMethod) — dua-duanya diterima.
-  const obj = metode as { nama_metode?: string; nama?: string };
-  return obj.nama_metode ?? obj.nama ?? "-";
-};
+/**
+ * Nama metode untuk kartu riwayat.
+ *
+ * Sumber bisa objek `{nama}` (order), objek `{nama_metode}` (metode
+ * pembayaran), atau string — semuanya dirapikan oleh
+ * `normalisasiMetodePembayaran()`.
+ */
+const namaMetode = (order: Order): string =>
+  normalisasiMetodePembayaran(order.metode_pembayaran)?.nama ||
+  order.metode_pembayaran_nama ||
+  "-";
 
 /**
  * Kartu riwayat pesanan Zovora — guideline §3.8/§3.9/§5.
@@ -112,7 +116,7 @@ export function OrderCard({
             maxFontSizeMultiplier={1.3}
           >
             {teks.pesanan.jumlahItem.replace("{jumlah}", String(items.length))} •{" "}
-            {namaMetode(order.metode_pembayaran)}
+            {namaMetode(order)}
           </Text>
         </View>
 

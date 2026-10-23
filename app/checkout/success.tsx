@@ -3,7 +3,7 @@ import { useLocalSearchParams, useRouter } from "expo-router";
 import { useEffect, useState } from "react";
 import { Pressable, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { StickyBar } from "../../src/components/commerce";
+import { StickyBar, PaymentInstructionCard } from "../../src/components/commerce";
 import { AppBar } from "../../src/components/layout";
 import { Button } from "../../src/components/ui";
 import { angka, rupiah } from "../../src/lib/format";
@@ -12,7 +12,7 @@ import { colors, sizes } from "../../src/theme/tokens";
 import { apiService } from "../../services/apiService";
 import type { OrderDetail } from "../../services/types";
 import { formatDateTime, useOrderExpiry } from "../../utils/orderExpiry";
-import { buildPaymentInstruction, isTransfer, jenisLabel } from "../../utils/payment";
+import { kembaliAman } from "../../src/lib/navigasi";
 
 /**
  * Pesanan Berhasil Zovora — layar baru (belum ada di kit).
@@ -67,24 +67,23 @@ export default function CheckoutSuccessScreen() {
   }, [orderId]);
 
   const metode = order?.metode_pembayaran;
-  const instruksi = metode
-    ? buildPaymentInstruction({
-        nama_metode: metode.nama,
-        jenis_pembayaran: metode.jenis,
-        nomor_rekening: metode.nomor_rekening ?? null,
-        atas_nama: metode.atas_nama ?? null,
-        instruksi: metode.instruksi ?? null,
-      })
-    : [];
 
   const lacak = () => {
     if (orderId) router.replace(`/orders/${orderId}` as any);
     else router.replace("/orders");
   };
 
+  /**
+   * Layar ini boleh dibuka langsung (deep link `?orderNumber=...`), sehingga
+   * stack navigasi bisa kosong. `kembaliAman` mencegah dev warning
+   * "GO_BACK was not handled" dan mengarahkan ke beranda bila tidak ada
+   * layar sebelumnya.
+   */
+  const kembali = () => kembaliAman(router, "/");
+
   return (
     <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
-      <AppBar title={teks.judul.orders} showBack={false} />
+      <AppBar title={teks.judul.orders} onBack={kembali} />
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
         <View className="px-4 pt-6">
@@ -185,40 +184,12 @@ export default function CheckoutSuccessScreen() {
             </View>
           ) : null}
 
-          {instruksi.length > 0 ? (
-            <View className="mt-4 rounded-lg border border-neutral-200 bg-white p-4">
-              <Text className="font-inter-semibold text-base text-neutral-900">
-                {teks.checkout.instruksiPembayaran}
-              </Text>
-              <Text className="mt-1 font-inter text-xs text-neutral-500">
-                {metode?.nama} · {jenisLabel(metode?.jenis)}
-              </Text>
-              <View className="mt-3 rounded-md bg-neutral-50 p-3">
-                {instruksi.map((baris, i) => (
-                  <Text
-                    key={i}
-                    className="mb-1 font-inter text-xs text-neutral-700"
-                    maxFontSizeMultiplier={1.3}
-                  >
-                    • {baris}
-                  </Text>
-                ))}
-              </View>
-
-              {isTransfer(metode?.jenis) && metode?.nomor_rekening ? (
-                <View className="mt-2 rounded-md border border-primary-100 bg-primary-50 p-3">
-                  <Text className="font-inter text-caption text-neutral-500">
-                    {teks.checkout.nomorRekening}
-                  </Text>
-                  <Text className="font-inter-bold text-base text-neutral-900 tabular-nums">
-                    {metode.nomor_rekening}
-                  </Text>
-                  <Text className="mt-0.5 font-inter text-caption text-neutral-500">
-                    {teks.checkout.atasNama}: {metode.atas_nama ?? "-"}
-                  </Text>
-                </View>
-              ) : null}
-            </View>
+          {metode ? (
+            <PaymentInstructionCard
+              metode={metode}
+              judul={teks.checkout.instruksiPembayaran}
+              className="mt-4"
+            />
           ) : null}
 
           <View className="mt-4 flex-row items-start gap-2 rounded-lg bg-primary-50 p-4">

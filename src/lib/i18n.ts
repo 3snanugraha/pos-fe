@@ -329,6 +329,7 @@ export const teks = {
     itemPesanan: "Item Pesanan",
     instruksiPembayaran: "Instruksi Pembayaran",
     nomorRekening: "Nomor Rekening",
+    nomorTujuan: "Nomor Tujuan",
     atasNama: "Atas Nama",
     rekeningBelumDiatur: "Rekening tujuan belum diatur admin",
     transferKe: "Transfer ke {rekening} a.n. {nama}",

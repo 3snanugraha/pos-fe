@@ -22,6 +22,7 @@ import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context"
 import {
   ErrorState,
   OrderTimeline,
+  PaymentInstructionCard,
   PriceSummary,
   Skeleton,
   StatusBadge,
@@ -39,12 +40,11 @@ import {
   warnaNada,
 } from "../../src/lib/pesanan";
 import { colors } from "../../src/theme/tokens";
+import { kembaliAman } from "../../src/lib/navigasi";
 import { apiService } from "../../services/apiService";
 import type { OrderDetail } from "../../services/types";
 import { useOrderExpiry } from "../../utils/orderExpiry";
 import {
-  buildPaymentInstruction,
-  isTransfer,
   jenisLabel,
   parseSplitFromCatatan,
   stripSplitFromCatatan,
@@ -80,6 +80,11 @@ export default function OrderDetailScreen() {
     isi: string;
     aksi?: { label: string; onPress: () => void };
   } | null>(null);
+
+  /**
+   * Detail pesanan bisa dibuka langsung dari notifikasi/URL; stack bisa kosong.
+   */
+  const kembali = () => kembaliAman(router, "/orders");
 
   const loadOrder = useCallback(async (): Promise<{
     order: OrderDetail | null;
@@ -231,7 +236,7 @@ export default function OrderDetailScreen() {
   if (loading) {
     return (
       <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
-        <AppBar title={teks.pesanan.detail} onBack={() => router.back()} />
+        <AppBar title={teks.pesanan.detail} onBack={kembali} />
         <View className="px-4 pt-4">
           <View className="rounded-lg border border-neutral-200 bg-white p-4">
             <Skeleton height={16} width="60%" />
@@ -258,7 +263,7 @@ export default function OrderDetailScreen() {
   if (error && !order) {
     return (
       <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
-        <AppBar title={teks.pesanan.detail} onBack={() => router.back()} />
+        <AppBar title={teks.pesanan.detail} onBack={kembali} />
         <ErrorState pesan={error} onRetry={muatUlang} />
       </SafeAreaView>
     );
@@ -267,7 +272,7 @@ export default function OrderDetailScreen() {
   if (!order) {
     return (
       <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
-        <AppBar title={teks.pesanan.detail} onBack={() => router.back()} />
+        <AppBar title={teks.pesanan.detail} onBack={kembali} />
         <ErrorState
           judul={teks.pesanan.tidakDitemukan.judul}
           pesan={teks.pesanan.tidakDitemukan.deskripsi}
@@ -281,15 +286,6 @@ export default function OrderDetailScreen() {
   const info = infoStatus(status);
   const IkonStatus = info.ikon;
   const metode = order.metode_pembayaran;
-  const instruksi = metode
-    ? buildPaymentInstruction({
-        nama_metode: metode.nama,
-        jenis_pembayaran: metode.jenis,
-        nomor_rekening: metode.nomor_rekening ?? null,
-        atas_nama: metode.atas_nama ?? null,
-        instruksi: metode.instruksi ?? null,
-      })
-    : [];
   const splitInfo = parseSplitFromCatatan(order.catatan);
   const catatanBersih = stripSplitFromCatatan(order.catatan);
   const timeline = indeksTimeline(status);
@@ -298,7 +294,7 @@ export default function OrderDetailScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
-      <AppBar title={teks.pesanan.detail} onBack={() => router.back()} />
+      <AppBar title={teks.pesanan.detail} onBack={kembali} />
 
       <ScrollView
         className="flex-1"
@@ -409,46 +405,12 @@ export default function OrderDetailScreen() {
         </View>
 
         {/* Instruksi pembayaran (hanya selama pending) */}
-        {instruksi.length > 0 && status === "pending" ? (
-          <View className="mt-3 rounded-lg border border-neutral-200 bg-white p-4">
-            <View className="mb-2 flex-row items-center gap-2">
-              <Wallet size={18} color={colors.primary600} strokeWidth={1.75} />
-              <Text
-                className="flex-1 font-inter-semibold text-base text-neutral-900"
-                maxFontSizeMultiplier={1.3}
-              >
-                {teks.pesanan.instruksiPembayaran}
-              </Text>
-            </View>
-            <View className="rounded-md border border-primary-100 bg-primary-50 p-3">
-              {instruksi.map((baris, i) => (
-                <Text
-                  key={i}
-                  className="mb-1 font-inter text-xs text-primary-800"
-                  maxFontSizeMultiplier={1.3}
-                >
-                  • {baris}
-                </Text>
-              ))}
-            </View>
-            {isTransfer(metode?.jenis) && metode?.nomor_rekening ? (
-              <View className="mt-2 rounded-md bg-neutral-50 p-3">
-                <Text className="font-inter text-caption text-neutral-500">
-                  {teks.pesanan.nomorRekening}
-                </Text>
-                <Text
-                  className="font-inter-bold text-base text-neutral-900 tabular-nums"
-                  selectable
-                  maxFontSizeMultiplier={1.3}
-                >
-                  {metode.nomor_rekening}
-                </Text>
-                <Text className="mt-1 font-inter text-caption text-neutral-500">
-                  {teks.pesanan.atasNama}: {metode.atas_nama ?? "-"}
-                </Text>
-              </View>
-            ) : null}
-          </View>
+        {metode && status === "pending" ? (
+          <PaymentInstructionCard
+            metode={metode}
+            judul={teks.pesanan.instruksiPembayaran}
+            className="mt-3"
+          />
         ) : null}
 
         {/* Produk dipesan */}
@@ -632,18 +594,7 @@ export default function OrderDetailScreen() {
             title={teks.pesanan.kembaliRiwayat}
             variant="outline"
             fullWidth
-            onPress={() => {
-              /**
-               * Harus kembali ke layar riwayat yang sudah ada, bukan `push`
-               * route baru: push membuat instance /orders kedua dengan filter
-               * default "Semua", sehingga filter pengguna hilang dan tumpukan
-               * navigasi terus bertambah setiap kali kembali dari detail.
-               * Bila detail dibuka langsung (mis. dari notifikasi/URL),
-               * `canGoBack` false → ganti layar alih-alih menumpuk.
-               */
-              if (router.canGoBack()) router.back();
-              else router.replace("/orders");
-            }}
+            onPress={kembali}
           />
           {bisaBatal ? (
             <Button

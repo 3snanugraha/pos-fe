@@ -10,6 +10,10 @@ export { ErrorState, type ErrorStateProps } from "./ErrorState";
 export { NotificationItem, type NotificationItemProps, type TipeNotifikasi } from "./NotificationItem";
 export { OrderCard, ORDER_CARD_TOUCH, type OrderCardProps } from "./OrderCard";
 export { OrderTimeline, type OrderTimelineProps } from "./OrderTimeline";
+export {
+  PaymentInstructionCard,
+  type PaymentInstructionCardProps,
+} from "./PaymentInstructionCard";
 export { StatusBadge, type StatusBadgeProps } from "./StatusBadge";
 export { PriceSummary, type BarisRingkasan, type PriceSummaryProps } from "./PriceSummary";
 export { StickyBar, StickyTotal, type StickyBarProps } from "./StickyBar";

@@ -353,13 +353,12 @@ export class ApiService {
   /**
    * Get order details by ID
    *
-   * `CustomerOrderController@show` hanya mengirim
-   * `metode_pembayaran: { id, nama, jenis }` — tanpa `nomor_rekening` /
-   * `atas_nama`. Akibatnya instruksi "transfer ke rekening X" tidak pernah
-   * muncul di halaman sukses maupun detail order. Data rekening dilengkapi
-   * di sini dari `getPaymentMethods()` (yang sudah menggabungkan route staff
-   * dan di-cache), jadi semua pemanggil ikut terbantu. Kegagalan pelengkap
-   * tidak boleh menggagalkan detail order.
+   * `CustomerOrderController@show` sudah mengirim
+   * `metode_pembayaran: { id, nama, jenis, nomor_rekening, atas_nama }`.
+   * Pelengkap di bawah hanya jaring pengaman untuk backend lama yang belum
+   * menyertakan rekening: data diambil dari `getPaymentMethods()` (yang
+   * menggabungkan route staff dan di-cache). Kegagalan pelengkap tidak boleh
+   * menggagalkan detail order.
    */
   async getOrderDetails(id: number): Promise<Types.Order> {
     const response = await httpClient.get<Types.Order>(

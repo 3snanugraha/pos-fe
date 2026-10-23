@@ -30,7 +30,9 @@
   ],
   "exclude": [
     "node_modules",
-    "services/__tests__"
+    "services/__tests__",
+    "utils/__tests__",
+    "src/lib/__tests__"
   ],
   "extends": "expo/tsconfig.base"
 }
