@@ -215,7 +215,7 @@ export default function CartScreen() {
             </View>
           </ScrollView>
 
-          <StickyBar>
+          <StickyBar denganInset={false}>
             <StickyTotal
               nilai={rupiah(totalAmount)}
               catatan={teks.checkout.totalItem.replace("{jumlah}", String(itemCount))}

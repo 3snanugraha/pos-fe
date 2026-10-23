@@ -19,6 +19,7 @@ import { Badge } from "../../src/components/ui/Badge";
 import { EmptyState } from "../../src/components/ui/EmptyState";
 import { Stepper } from "../../src/components/ui/Stepper";
 import { rupiah } from "../../src/lib/format";
+import { paddingBawahStickyBar } from "../../src/lib/inset";
 import { teks } from "../../src/lib/i18n";
 import { formatRating, stokTampil } from "../../src/lib/produk";
 import { useRingkasanProduk } from "../../src/screens/produk/useRingkasanProduk";
@@ -221,7 +222,9 @@ export default function ProductDetailScreen() {
 
   if (memuat) {
     return (
-      <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
+      /* Skeleton memakai tata letak akhir: galeri menembus status bar,
+         tombol kembali di galeri sudah memakai inset atas sendiri. */
+      <SafeAreaView className="flex-1 bg-neutral-50" edges={["left", "right"]}>
         <ProductGallery
           gambar={[]}
           loading
@@ -451,7 +454,7 @@ export default function ProductDetailScreen() {
       {/* Sticky CTA bar — dua tombol flex 1 : 1,3, gap 12 (guideline §3.1). */}
       <View
         className="w-full flex-row items-center gap-3 border-t border-neutral-100 bg-white px-4 pt-3"
-        style={[{ paddingBottom: Math.max(insets.bottom, 12) }, shadowStyle("bar")]}
+        style={[{ paddingBottom: paddingBawahStickyBar(insets) }, shadowStyle("bar")]}
       >
         <Pressable
           onPress={onTambahKeranjang}

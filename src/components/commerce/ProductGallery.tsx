@@ -10,9 +10,11 @@ import {
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { formatRating } from "../../lib/produk";
 import { teks } from "../../lib/i18n";
 import { colors, sizes } from "../../theme/tokens";
+import { offsetMengambang } from "../../lib/inset";
 import { Skeleton } from "./Skeleton";
 
 export type GambarProduk = { id: number; url?: string | null; gambar_utama?: boolean };
@@ -44,6 +46,7 @@ export function ProductGallery({
   loading = false,
 }: ProductGalleryProps) {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const [aktif, setAktif] = useState(0);
   const listRef = useRef<FlatList<GambarProduk>>(null);
   const sisi = Math.min(width, 720);
@@ -151,10 +154,12 @@ export function ProductGallery({
           </Pressable>
         ) : null}
 
-        {/* Tombol kembali & aksi di atas gambar (icon button 36 shadow-float). */}
+        {/* Tombol kembali & aksi di atas gambar (icon button 36 shadow-float).
+            Gambar hero boleh menembus status bar (§2.5), tetapi tombol harus
+            mulai di bawah inset atas agar tidak tertutup notif bar. */}
         <View
           className="absolute left-3 right-3 flex-row items-center justify-between"
-          style={{ top: 12 }}
+          style={{ top: offsetMengambang(insets) }}
           pointerEvents="box-none"
         >
           {onBack ? (

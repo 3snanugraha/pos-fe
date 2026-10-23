@@ -6,6 +6,7 @@ import { useCart } from "../../../contexts/CartContext";
 import { badgeJumlah } from "../../lib/format";
 import { teks } from "../../lib/i18n";
 import { colors, shadowStyle, sizes } from "../../theme/tokens";
+import { tinggiTabBar } from "../../lib/inset";
 
 /**
  * Bentuk props tab bar — sengaja struktural (bukan impor tipe internal
@@ -110,7 +111,7 @@ export function BottomTabBar({ state, descriptors, navigation }: BottomTabBarPro
     <View
       className="w-full flex-row items-start border-t border-neutral-100 bg-white"
       style={[
-        { height: sizes.tabBar + insets.bottom, paddingBottom: insets.bottom },
+        { height: tinggiTabBar(sizes.tabBar, insets.bottom), paddingBottom: Math.max(0, insets.bottom) },
         shadowStyle("bar"),
       ]}
       accessibilityRole="tablist"

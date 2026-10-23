@@ -1,5 +1,6 @@
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Text, View, type ViewStyle } from "react-native";
+import { paddingBawahStickyBar } from "../../lib/inset";
 import { shadowStyle } from "../../theme/tokens";
 
 export type StickyBarProps = {
@@ -30,7 +31,7 @@ export function StickyBar({
   return (
     <View
       className={`w-full border-t border-neutral-100 bg-white ${className}`}
-      style={[shadowStyle("bar"), { paddingBottom: (denganInset ? insets.bottom : 0) + 16 }, style]}
+      style={[shadowStyle("bar"), { paddingBottom: paddingBawahStickyBar(insets, denganInset) }, style]}
     >
       {atas}
       <View className="flex-row items-center justify-between gap-3 px-4 pt-3">{children}</View>

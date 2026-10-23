@@ -9,6 +9,7 @@ import {
   useWindowDimensions,
   type ModalProps,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { colors, overlay, shadowStyle } from "../../theme/tokens";
 
 export type DialogProps = {
@@ -50,6 +51,7 @@ export function Dialog({
   testID,
 }: DialogProps) {
   const { width } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   // Animated.Value di state (bukan ref) agar aman dibaca saat render.
   const [progress] = useState(() => new Animated.Value(0));
 
@@ -79,7 +81,16 @@ export function Dialog({
       statusBarTranslucent
       testID={testID}
     >
-      <View className="flex-1 items-center justify-center" style={{ backgroundColor: overlay }}>
+      <View
+        className="flex-1 items-center justify-center"
+        style={{
+          backgroundColor: overlay,
+          // statusBarTranslucent: overlay penuh, tetapi kartu dialog dibatasi
+          // ke area aman agar tidak tertutup notif bar / gesture bar.
+          paddingTop: insets.top,
+          paddingBottom: insets.bottom,
+        }}
+      >
         <Pressable
           className="absolute inset-0"
           onPress={dismissOnBackdrop ? onClose : undefined}
