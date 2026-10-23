@@ -12,6 +12,7 @@ import { teks } from "../../../src/lib/i18n";
 import { formatRating } from "../../../src/lib/produk";
 import { useUlasanProduk } from "../../../src/screens/produk/useUlasanProduk";
 import { colors, sizes } from "../../../src/theme/tokens";
+import { kembaliAman } from "../../../src/lib/navigasi";
 
 type OpsiUrut = "relevan" | "terbaru" | "tertinggi" | "terendah";
 
@@ -37,6 +38,9 @@ const LABEL_URUT: Record<OpsiUrut, string> = {
 export default function ReviewsScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/products");
   const insets = useSafeAreaInsets();
   const idProduk = Number(params.id);
   const { ulasan, ringkasan, status } = useUlasanProduk(
@@ -63,7 +67,7 @@ export default function ReviewsScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
-      <AppBar title={teks.ulasan.judul} onBack={() => router.back()} />
+      <AppBar title={teks.ulasan.judul} onBack={kembali} />
 
       {status === "memuat" ? (
         <View className="pt-4">
@@ -79,7 +83,7 @@ export default function ReviewsScreen() {
             title={teks.ulasan.belumAda}
             description={teks.ulasan.belumAdaDeskripsi}
             ctaLabel={teks.ulasan.judul}
-            onCtaPress={() => router.back()}
+            onCtaPress={kembali}
           />
         </View>
       ) : (

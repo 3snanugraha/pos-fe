@@ -5,6 +5,7 @@ import { Button, Input } from "../../components/ui";
 import { teks } from "../../lib/i18n";
 import { register } from "../../../services/auth";
 import { AuthShell } from "./AuthShell";
+import { kembaliAman } from "../../../src/lib/navigasi";
 import {
   validasiEmail,
   validasiKonfirmasi,
@@ -29,6 +30,9 @@ type ErrorField = {
  */
 export function SignUpScreen() {
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/auth/login");
   const [nama, setNama] = useState("");
   const [telepon, setTelepon] = useState("");
   const [email, setEmail] = useState("");
@@ -87,7 +91,7 @@ export function SignUpScreen() {
 
   return (
     <AuthShell
-      onBack={() => router.back()}
+      onBack={kembali}
       judul={teks.judul.signUp}
       subjudul={teks.subjudul.signUp}
       footer={

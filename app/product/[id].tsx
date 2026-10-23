@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { Heart, MessageSquare, Star } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { kembaliAman } from "../../src/lib/navigasi";
 import {
   Alert,
   Pressable,
@@ -68,6 +69,9 @@ type ProdukDetail = {
 export default function ProductDetailScreen() {
   const params = useLocalSearchParams();
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/products");
   const insets = useSafeAreaInsets();
   const { addItem } = useCart();
 
@@ -228,7 +232,7 @@ export default function ProductDetailScreen() {
         <ProductGallery
           gambar={[]}
           loading
-          onBack={() => router.back()}
+          onBack={kembali}
         />
         <View className="gap-3 p-4">
           <Skeleton height={20} width="80%" />
@@ -246,7 +250,7 @@ export default function ProductDetailScreen() {
       <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
         <View className="flex-row items-center px-2" style={{ height: sizes.appBar }}>
           <Pressable
-            onPress={() => router.back()}
+            onPress={() => kembali()}
             accessibilityRole="button"
             accessibilityLabel={teks.umum.kembali}
             hitSlop={sizes.hitSlop}
@@ -275,7 +279,7 @@ export default function ProductDetailScreen() {
           gambar={gambarGaleri}
           rating={rating}
           jumlahUlasan={jumlahUlasanProduk}
-          onBack={() => router.back()}
+          onBack={kembali}
           aksiKanan={
             <Pressable
               onPress={onTambahWishlist}

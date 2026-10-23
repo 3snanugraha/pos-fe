@@ -3,6 +3,7 @@ import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
 import { Pressable, RefreshControl, ScrollView, Text, View } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
+import { kembaliAman } from "../../src/lib/navigasi";
 import {
   ErrorState,
   ProductCardHorizontal,
@@ -59,6 +60,9 @@ function keProduk(row: BackendWishlistItem): ProdukApi {
  */
 const WishlistScreen = () => {
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/");
   const insets = useSafeAreaInsets();
   const { addItem } = useCart();
   const [wishlistItems, setWishlistItems] = useState<BackendWishlistItem[]>([]);
@@ -197,7 +201,7 @@ const WishlistScreen = () => {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
-      <AppBar title={judul} onBack={() => router.back()} />
+      <AppBar title={judul} onBack={kembali} />
 
       {loading ? (
         <View className="px-4 pt-2">

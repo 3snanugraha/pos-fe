@@ -6,6 +6,7 @@ import { teks } from "../../lib/i18n";
 import { mintaKodeReset } from "../../../services/passwordReset";
 import { AuthShell } from "./AuthShell";
 import { validasiEmail } from "./validasi";
+import { kembaliAman } from "../../../src/lib/navigasi";
 
 /**
  * Forgot Password Zovora — guideline §4 (satu CTA, AppBar auth, Input email).
@@ -17,6 +18,9 @@ import { validasiEmail } from "./validasi";
  */
 export function ForgotPasswordScreen() {
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/auth/login");
   const [email, setEmail] = useState("");
   const [error, setError] = useState<string | undefined>();
   const [pesan, setPesan] = useState<string | null>(null);
@@ -66,7 +70,7 @@ export function ForgotPasswordScreen() {
 
   return (
     <AuthShell
-      onBack={() => router.back()}
+      onBack={kembali}
       judul={teks.judul.forgotPassword}
       subjudul={teks.subjudul.forgotPassword}
       footer={

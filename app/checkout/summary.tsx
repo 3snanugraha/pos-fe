@@ -1,6 +1,7 @@
 import { useRouter } from "expo-router";
 import { ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
+import { kembaliAman } from "../../src/lib/navigasi";
 import {
   AddressCard,
   CartItemRow,
@@ -26,6 +27,9 @@ import { formatAlamatLengkap } from "../../utils/formatters";
  */
 export default function OrderSummaryScreen() {
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/checkout");
   const {
     items,
     cartLoading,
@@ -47,7 +51,7 @@ export default function OrderSummaryScreen() {
   if (error) {
     return (
       <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
-        <AppBar title={teks.judul.orderSummary} onBack={() => router.back()} />
+        <AppBar title={teks.judul.orderSummary} onBack={kembali} />
         <ErrorState pesan={error} onRetry={muatUlang} />
       </SafeAreaView>
     );
@@ -56,7 +60,7 @@ export default function OrderSummaryScreen() {
   if (memuat) {
     return (
       <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
-        <AppBar title={teks.judul.orderSummary} onBack={() => router.back()} />
+        <AppBar title={teks.judul.orderSummary} onBack={kembali} />
         <View className="px-4 pt-4">
           <Skeleton height={110} radiusClassName="rounded-lg" width="100%" />
           {[0, 1].map((i) => (
@@ -79,7 +83,7 @@ export default function OrderSummaryScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
-      <AppBar title={teks.judul.orderSummary} onBack={() => router.back()} />
+      <AppBar title={teks.judul.orderSummary} onBack={kembali} />
 
       <ScrollView className="flex-1" contentContainerStyle={{ paddingBottom: 24 }}>
         <View className="px-4 pt-2">

@@ -5,6 +5,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StickyBar } from "../../src/components/commerce";
 import { AppBar } from "../../src/components/layout";
 import { Button, Dialog } from "../../src/components/ui";
+import { kembaliAman } from "../../src/lib/navigasi";
 import {
   FORM_ALAMAT_KOSONG,
   FormAlamat,
@@ -26,6 +27,9 @@ import { getErrorMessage, handleAuthError } from "../../utils/auth";
  */
 export default function AddAddressScreen() {
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/addresses");
   const [form, setForm] = useState<AddressCreateData>({ ...FORM_ALAMAT_KOSONG });
   const [galat, setGalat] = useState<Record<string, string>>({});
   const [menyimpan, setMenyimpan] = useState(false);
@@ -81,7 +85,7 @@ export default function AddAddressScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
-      <AppBar title={teks.alamat.tambah} onBack={() => router.back()} />
+      <AppBar title={teks.alamat.tambah} onBack={kembali} />
 
       <KeyboardAvoidingView
         className="flex-1"

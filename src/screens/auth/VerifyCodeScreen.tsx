@@ -6,6 +6,7 @@ import { samarkanEmail } from "../../lib/format";
 import { teks, t } from "../../lib/i18n";
 import { mintaKodeReset, verifikasiKodeReset } from "../../../services/passwordReset";
 import { AuthShell } from "./AuthShell";
+import { kembaliAman } from "../../../src/lib/navigasi";
 
 /** Detik hitung mundur tombol kirim ulang (guideline §3.3). */
 const DETIK_RESEND = 30;
@@ -18,6 +19,9 @@ const DETIK_RESEND = 30;
  */
 export function VerifyCodeScreen() {
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/auth/login");
   const params = useLocalSearchParams<{ email?: string; reset_token?: string }>();
   const email = (params.email ?? "").toString();
   const resetTokenAwal = (params.reset_token ?? "").toString();
@@ -108,7 +112,7 @@ export function VerifyCodeScreen() {
 
   return (
     <AuthShell
-      onBack={() => router.back()}
+      onBack={kembali}
       judul={teks.judul.verifyCode}
       subjudul={
         email

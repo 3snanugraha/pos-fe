@@ -1,6 +1,7 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { ArrowUpLeft, ImageIcon, Search, SlidersHorizontal, TrendingUp, Trash2 } from "lucide-react-native";
 import React, { useCallback, useEffect, useMemo, useState } from "react";
+import { kembaliAman } from "../../src/lib/navigasi";
 import {
   FlatList,
   Image,
@@ -62,6 +63,9 @@ const SORT_OPTIONS = [
  */
 export default function SearchScreen() {
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/");
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams();
   const initialQuery = typeof params.query === "string" ? params.query : "";
@@ -224,7 +228,7 @@ export default function SearchScreen() {
     <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
       <AppBar
         title={teks.judul.search}
-        onBack={() => router.back()}
+        onBack={kembali}
         right={
           <Pressable
             onPress={() => setShowFilters((v) => !v)}

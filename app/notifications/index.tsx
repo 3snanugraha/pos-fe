@@ -12,6 +12,7 @@ import { colors } from "../../src/theme/tokens";
 import { apiService } from "../../services/apiService";
 import type { Notification } from "../../services/types";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
+import { kembaliAman } from "../../src/lib/navigasi";
 
 /**
  * Notifikasi Zovora — guideline §3.15 + §5.
@@ -26,6 +27,9 @@ import { getErrorMessage, handleAuthError } from "../../utils/auth";
  */
 const NotificationsScreen = () => {
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/");
   const insets = useSafeAreaInsets();
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
@@ -147,7 +151,7 @@ const NotificationsScreen = () => {
     <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
       <AppBar
         title={teks.judul.notifications}
-        onBack={() => router.back()}
+        onBack={kembali}
         onPressMenu={notifications.length > 0 ? () => setDialog("menu") : undefined}
       />
 

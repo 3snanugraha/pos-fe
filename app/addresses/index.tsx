@@ -11,6 +11,7 @@ import { colors, sizes } from "../../src/theme/tokens";
 import { apiService } from "../../services/apiService";
 import type { CustomerAddress } from "../../services/types";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
+import { kembaliAman } from "../../src/lib/navigasi";
 
 const alamatLengkap = (a: CustomerAddress) =>
   [
@@ -32,6 +33,9 @@ const alamatLengkap = (a: CustomerAddress) =>
  */
 export default function AddressListScreen() {
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/profile");
   const [addresses, setAddresses] = useState<CustomerAddress[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -148,7 +152,7 @@ export default function AddressListScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
-      <AppBar title={judul} onBack={() => router.back()} />
+      <AppBar title={judul} onBack={kembali} />
 
       {loading ? (
         <View className="flex-1 px-4 pt-4">

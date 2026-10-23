@@ -7,6 +7,7 @@ import {
   Toolbox,
   type LucideIcon,
 } from "lucide-react-native";
+import { kembaliAman } from "../../src/lib/navigasi";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import { RefreshControl, ScrollView, Text, View } from "react-native";
@@ -124,6 +125,9 @@ const keMs = (value?: string | number | null): number | null => {
  */
 export default function PointsHistoryScreen() {
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/");
   const insets = useSafeAreaInsets();
   const [baris, setBaris] = useState<PointRow[]>([]);
   const [profil, setProfil] = useState<CustomerProfile | null>(null);
@@ -203,7 +207,7 @@ export default function PointsHistoryScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
-      <AppBar title={teks.poin.judul} onBack={() => router.back()} />
+      <AppBar title={teks.poin.judul} onBack={kembali} />
 
       {loading ? (
         <View className="flex-1 px-4 pt-4">

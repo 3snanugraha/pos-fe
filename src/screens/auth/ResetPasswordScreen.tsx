@@ -6,6 +6,7 @@ import { teks } from "../../lib/i18n";
 import { simpanPasswordBaru } from "../../../services/passwordReset";
 import { AuthShell } from "./AuthShell";
 import { validasiKonfirmasi, validasiPassword } from "./validasi";
+import { kembaliAman } from "../../../src/lib/navigasi";
 
 /**
  * Reset Password Zovora — guideline §4 (satu CTA).
@@ -14,6 +15,9 @@ import { validasiKonfirmasi, validasiPassword } from "./validasi";
  */
 export function ResetPasswordScreen() {
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/auth/login");
   const params = useLocalSearchParams<{ email?: string; reset_token?: string }>();
   const email = (params.email ?? "").toString();
   const resetToken = (params.reset_token ?? "").toString();
@@ -72,7 +76,7 @@ export function ResetPasswordScreen() {
 
   return (
     <AuthShell
-      onBack={() => router.back()}
+      onBack={kembali}
       judul={teks.judul.resetPassword}
       subjudul={teks.subjudul.resetPassword}
       footer={

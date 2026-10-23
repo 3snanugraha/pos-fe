@@ -13,6 +13,7 @@ import { useCart } from "../../contexts/CartContext";
 import { apiService } from "../../services/apiService";
 import type { Order } from "../../services/types";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
+import { kembaliAman } from "../../src/lib/navigasi";
 
 type FilterKunci = "semua" | "pending" | "selesai" | "dibatalkan" | "retur";
 
@@ -37,6 +38,9 @@ type Pesan = { tipe: "sukses" | "gagal"; isi: string } | null;
  */
 export default function OrderHistoryScreen() {
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/");
   const insets = useSafeAreaInsets();
   const { addItem } = useCart();
   const [orders, setOrders] = useState<Order[]>([]);
@@ -186,7 +190,7 @@ export default function OrderHistoryScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
-      <AppBar title={teks.pesanan.riwayat} onBack={() => router.back()} />
+      <AppBar title={teks.pesanan.riwayat} onBack={kembali} />
 
       {/* Chip filter status — role tab agar status aktif diumumkan (§7). */}
       <View className="border-b border-neutral-100 bg-white">

@@ -7,6 +7,7 @@ import {
   ShieldCheck,
   XCircle,
 } from "lucide-react-native";
+import { kembaliAman } from "../../src/lib/navigasi";
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
@@ -70,6 +71,9 @@ interface KasirOrder {
  */
 export default function KasirOrdersScreen() {
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/");
   const insets = useSafeAreaInsets();
   const [staff, setStaff] = useState<StaffUser | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
@@ -267,7 +271,7 @@ export default function KasirOrdersScreen() {
   if (checkingSession) {
     return (
       <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
-        <AppBar title={teks.kasir.judul} onBack={() => router.back()} />
+        <AppBar title={teks.kasir.judul} onBack={kembali} />
         <View className="px-4 pt-4">
           <View className="rounded-lg border border-neutral-200 bg-white p-4">
             <Skeleton height={16} width="45%" />
@@ -284,7 +288,7 @@ export default function KasirOrdersScreen() {
   if (!staff) {
     return (
       <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
-        <AppBar title={teks.kasir.judulLengkap} onBack={() => router.back()} />
+        <AppBar title={teks.kasir.judulLengkap} onBack={kembali} />
         <ScrollView
           className="flex-1"
           contentContainerStyle={{ padding: 16 }}
@@ -363,7 +367,7 @@ export default function KasirOrdersScreen() {
     <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
       <AppBar
         title={teks.kasir.judul}
-        onBack={() => router.back()}
+        onBack={kembali}
         right={
           <Pressable
             onPress={handleLogout}

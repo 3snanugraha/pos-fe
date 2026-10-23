@@ -6,6 +6,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { ErrorState, Skeleton, StickyBar } from "../../../src/components/commerce";
 import { AppBar } from "../../../src/components/layout";
 import { Button, Dialog, EmptyState } from "../../../src/components/ui";
+import { kembaliAman } from "../../../src/lib/navigasi";
 import {
   FORM_ALAMAT_KOSONG,
   FormAlamat,
@@ -28,6 +29,9 @@ import { getErrorMessage, handleAuthError } from "../../../utils/auth";
  */
 export default function EditAddressScreen() {
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/addresses");
   const { id } = useLocalSearchParams<{ id: string }>();
   const [alamat, setAlamat] = useState<CustomerAddress | null>(null);
   const [form, setForm] = useState<AddressCreateData>({ ...FORM_ALAMAT_KOSONG });
@@ -118,7 +122,7 @@ export default function EditAddressScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
-      <AppBar title={teks.tombol.ubahAlamat} onBack={() => router.back()} />
+      <AppBar title={teks.tombol.ubahAlamat} onBack={kembali} />
 
       {memuat ? (
         <View className="flex-1 px-4 pt-4">
@@ -148,7 +152,7 @@ export default function EditAddressScreen() {
           title={teks.alamat.tidakDitemukan.judul}
           description={teks.alamat.tidakDitemukan.deskripsi}
           ctaLabel={teks.pesanan.kembaliRiwayat}
-          onCtaPress={() => router.back()}
+          onCtaPress={kembali}
         />
       ) : (
         <KeyboardAvoidingView
@@ -176,7 +180,7 @@ export default function EditAddressScreen() {
         onClose={() => {
           const sukses = pesan?.sukses;
           setPesan(null);
-          if (sukses) router.back();
+          if (sukses) kembali();
         }}
         title={pesan?.judul}
         description={pesan?.isi}
@@ -188,7 +192,7 @@ export default function EditAddressScreen() {
             onPress={() => {
               const sukses = pesan?.sukses;
               setPesan(null);
-              if (sukses) router.back();
+              if (sukses) kembali();
             }}
           />
         }

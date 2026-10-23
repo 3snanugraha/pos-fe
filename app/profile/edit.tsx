@@ -1,5 +1,6 @@
 import { useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
+import { kembaliAman } from "../../src/lib/navigasi";
 import {
   KeyboardAvoidingView,
   Platform,
@@ -45,6 +46,9 @@ const FORM_KOSONG: Form = {
  */
 export default function EditProfileScreen() {
   const router = useRouter();
+
+  /** Layar ini bisa dibuka langsung (deep link); kembali dengan aman. */
+  const kembali = () => kembaliAman(router, "/profile");
   const [form, setForm] = useState<Form>({ ...FORM_KOSONG });
   const [galat, setGalat] = useState<Record<string, string>>({});
   const [memuat, setMemuat] = useState(true);
@@ -169,7 +173,7 @@ export default function EditProfileScreen() {
 
   return (
     <SafeAreaView className="flex-1 bg-white" edges={["top", "left", "right"]}>
-      <AppBar title={teks.profil.ubah.judul} onBack={() => router.back()} />
+      <AppBar title={teks.profil.ubah.judul} onBack={kembali} />
 
       {memuat ? (
         <View className="flex-1 px-4 pt-4">
@@ -302,7 +306,7 @@ export default function EditProfileScreen() {
         onClose={() => {
           const sukses = pesan?.sukses;
           setPesan(null);
-          if (sukses) router.back();
+          if (sukses) kembali();
         }}
         title={pesan?.judul}
         description={pesan?.isi}
@@ -314,7 +318,7 @@ export default function EditProfileScreen() {
             onPress={() => {
               const sukses = pesan?.sukses;
               setPesan(null);
-              if (sukses) router.back();
+              if (sukses) kembali();
             }}
           />
         }
