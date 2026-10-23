@@ -790,6 +790,9 @@ export const teks = {
       cta: "Lihat Semua",
     },
     pilihKategori: "Pilih kategori",
+    memuatLagi: "Memuat produk…",
+    galatLagi: "Gagal memuat produk berikutnya.",
+    habis: "Semua produk sudah tampil",
   },
 
   /** Layar kasir (W5) — login staf & verifikasi order online. */

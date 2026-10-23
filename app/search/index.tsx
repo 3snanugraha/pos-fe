@@ -20,6 +20,7 @@ import { ProductCardGrid } from "../../src/components/commerce";
 import { SearchBar } from "../../src/components/commerce/SearchBar";
 import { SkeletonGridProduk } from "../../src/components/commerce/Skeleton";
 import { paddingBawahKonten } from "../../src/lib/inset";
+import { angka } from "../../src/lib/format";
 import { teks } from "../../src/lib/i18n";
 import { useRiwayatPencarian } from "../../src/lib/riwayatPencarian";
 import { colors, sizes } from "../../src/theme/tokens";
@@ -67,6 +68,8 @@ export default function SearchScreen() {
 
   const [searchQuery, setSearchQuery] = useState(initialQuery);
   const [products, setProducts] = useState<Product[]>([]);
+  /** Total hasil dari `meta.total` API — bukan jumlah item halaman ini. */
+  const [totalHasil, setTotalHasil] = useState(0);
   const [categories, setCategories] = useState<ProductCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<number | null>(null);
   const [sortBy, setSortBy] = useState<string>("nama_produk");
@@ -116,6 +119,12 @@ export default function SearchScreen() {
       try {
         const result = await apiService.searchProducts(permintaan as never);
         const produk = result.data ?? [];
+        /**
+         * Jumlah hasil memakai `meta.total` dari API, bukan `produk.length`:
+         * satu halaman hanya memuat `per_page` item, jadi `length` bukan total
+         * (bug yang sama dengan layar kategori).
+         */
+        const totalServer = Number(result.meta?.total);
 
         /**
          * Backend mengabaikan `harga_min`/`harga_max` pada rute publik
@@ -131,6 +140,9 @@ export default function SearchScreen() {
         });
 
         setProducts(tersaring);
+        setTotalHasil(
+          Number.isFinite(totalServer) && totalServer > 0 ? totalServer : tersaring.length,
+        );
         setKataDicari(query.trim());
       } catch (e) {
         const isAuthError = await handleAuthError(e);
@@ -552,7 +564,10 @@ export default function SearchScreen() {
             >
               {adaQuery
                 ? teks.pencarian.hasilUntuk.replace("{query}", searchQuery.trim())
-                : teks.pencarian.jumlahHasil.replace("{jumlah}", String(products.length))}
+                : teks.pencarian.jumlahHasil.replace(
+                    "{jumlah}",
+                    angka(totalHasil > 0 ? totalHasil : products.length),
+                  )}
             </Text>
           }
           renderItem={({ item }) => (
