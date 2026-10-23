@@ -72,6 +72,19 @@ export function Dialog({
 
   const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] });
 
+  /*
+   * Dialog yang sudah ditutup TIDAK boleh tetap ada di pohon DOM.
+   *
+   * `Modal` react-native-web hanya menyembunyikan isinya (opacity 0) saat
+   * `visible=false`, sehingga tombol "Batal"/"Hapus" tetap bisa difokus
+   * keyboard dan tetap diumumkan pembaca layar — pengguna bisa menekan "Hapus"
+   * pada dialog yang tidak terlihat. Karena itu isi dialog di-unmount total;
+   * animasi masuk tetap berjalan lewat `animationType` milik Modal.
+   */
+  if (!visible) {
+    return null;
+  }
+
   return (
     <Modal
       visible={visible}
