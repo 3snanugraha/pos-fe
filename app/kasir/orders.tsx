@@ -44,7 +44,12 @@ import {
 } from "../../services/staffSession";
 import type { Transaction } from "../../services/types";
 import { useOrderExpiry } from "../../utils/orderExpiry";
-import { ambilTokenStaf, useNotifikasiRealtime } from "../../src/lib/realtime/useNotifikasiRealtime";
+import {
+  useNotifikasiMasuk,
+  useRealtime,
+  type PesanRealtime,
+} from "../../src/lib/realtime/RealtimeProvider";
+import { TombolSuara } from "../../src/components/notifikasi/TombolSuara";
 
 interface KasirOrder {
   transaction: Transaction;
@@ -142,32 +147,48 @@ export default function KasirOrdersScreen() {
     }
   }, []);
 
+  /**
+   * Koneksi realtime dibuat di root saat aplikasi dibuka — ketika token staf
+   * belum ada. Setelah login berhasil (atau sesi dipulihkan) kita harus
+   * menyambung ulang, kalau tidak channel `private-orders` tidak pernah
+   * dilanggani.
+   */
+  const { sambungUlang } = useRealtime();
+
   useEffect(() => {
     (async () => {
       const user = await getStaffUser();
       setStaff(user);
       setCheckingSession(false);
-      if (user) loadOrders();
+      if (user) {
+        loadOrders();
+        // Sesi staf dipulihkan dari storage → token sudah ada, sambungkan.
+        sambungUlang();
+      }
     })();
-  }, [loadOrders]);
+  }, [loadOrders, sambungUlang]);
 
   /**
    * Realtime: order baru dari aplikasi mobile / pelanggan.
    *
-   * Channel-nya privat untuk tim, jadi setiap event pasti relevan: daftar
-   * order pending langsung dimuat ulang (tanpa menunggu tarik manual) dan
-   * bell diputar oleh hook. Hanya aktif setelah login staf.
+   * Koneksi Pusher dipasang sekali di root (`RealtimeProvider`), bukan di
+   * layar ini — jadi order baru tetap sampai walau kasir sedang membuka layar
+   * lain, dan bell tetap berbunyi. Di sini kita hanya bereaksi terhadap event
+   * yang memang milik layar ini.
    */
-  const tanganiOrderBaru = useCallback(() => {
-    setActionMessage({ tipe: "sukses", teks: teks.kasir.orderBaruMasuk });
-    void loadOrders();
-  }, [loadOrders]);
+  const tanganiOrderBaru = useCallback(
+    (pesan: PesanRealtime) => {
+      if (pesan.notifikasi.target !== "kasir-order-baru") {
+        return;
+      }
 
-  useNotifikasiRealtime({
-    ambilToken: ambilTokenStaf,
-    onNotifikasi: tanganiOrderBaru,
-    aktif: !!staff,
-  });
+      setActionMessage({ tipe: "sukses", teks: teks.kasir.orderBaruMasuk });
+      void loadOrders();
+    },
+    [loadOrders]
+  );
+
+  useNotifikasiMasuk(tanganiOrderBaru);
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {
@@ -197,6 +218,9 @@ export default function KasirOrdersScreen() {
       }
 
       await loadOrders();
+      // Token staf baru tersedia sekarang → langgani channel privat tim
+      // (`private-orders`). Tanpa ini koneksi buatan root tetap tidak-aktif.
+      sambungUlang();
     } catch (err: any) {
       setError(
         err instanceof StaffApiError ? err.message : teks.kasir.loginGagal
@@ -212,6 +236,8 @@ export default function KasirOrdersScreen() {
     setOrders([]);
     setEmail("");
     setPassword("");
+    // Token sudah dihapus → lepaskan langganan channel privat.
+    sambungUlang();
   };
 
   /**
@@ -388,15 +414,18 @@ export default function KasirOrdersScreen() {
         title={teks.kasir.judul}
         onBack={kembali}
         right={
-          <Pressable
-            onPress={handleLogout}
-            accessibilityRole="button"
-            accessibilityLabel={teks.kasir.keluar}
-            hitSlop={sizes.hitSlop}
-            className="h-11 w-11 items-center justify-center"
-          >
-            <LogOut size={22} color={colors.neutral700} strokeWidth={1.75} />
-          </Pressable>
+          <View className="flex-row items-center">
+            <TombolSuara />
+            <Pressable
+              onPress={handleLogout}
+              accessibilityRole="button"
+              accessibilityLabel={teks.kasir.keluar}
+              hitSlop={sizes.hitSlop}
+              className="h-11 w-11 items-center justify-center"
+            >
+              <LogOut size={22} color={colors.neutral700} strokeWidth={1.75} />
+            </Pressable>
+          </View>
         }
       />
 

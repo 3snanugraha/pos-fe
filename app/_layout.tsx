@@ -11,6 +11,7 @@ import { StatusBar } from "expo-status-bar";
 import { useEffect } from "react";
 import ErrorBoundary from "../components/ErrorBoundary";
 import { CartProvider } from "../contexts/CartContext";
+import { RealtimeProvider } from "../src/lib/realtime/RealtimeProvider";
 import { colors } from "../src/theme/tokens";
 import installWebAlert from "../utils/webAlert";
 import "../global.css";
@@ -46,14 +47,18 @@ export default function RootLayout() {
   return (
     <ErrorBoundary>
       <CartProvider>
-        <StatusBar style="dark" />
-        <Stack
-          screenOptions={{
-            headerShown: false,
-            contentStyle: { backgroundColor: colors.neutral50 },
-            animation: "slide_from_right",
-          }}
-        />
+        {/* Satu koneksi Pusher untuk seluruh aplikasi: bell & badge hidup di
+            layar mana pun, bukan hanya saat layar notifikasi dibuka. */}
+        <RealtimeProvider>
+          <StatusBar style="dark" />
+          <Stack
+            screenOptions={{
+              headerShown: false,
+              contentStyle: { backgroundColor: colors.neutral50 },
+              animation: "slide_from_right",
+            }}
+          />
+        </RealtimeProvider>
       </CartProvider>
     </ErrorBoundary>
   );

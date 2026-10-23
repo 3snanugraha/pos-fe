@@ -386,6 +386,7 @@ export const teks = {
     menu: "Menu notifikasi",
     belumDibacaA11y: "Belum dibaca",
     realtimeAktif: "Realtime aktif",
+    realtimeGagal: "Notifikasi langsung tidak aktif",
     baru: "baru",
   },
 

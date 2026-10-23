@@ -38,6 +38,8 @@ export interface OpsiKlienRealtime {
   onNotifikasi: (notifikasi: NonNullable<HasilPemetaan["notifikasi"]>) => void;
   /** Callback perubahan status koneksi. */
   onStatus?: (status: StatusKoneksi) => void;
+  /** Callback saat langganan channel ditolak (auth 403/503, dsb.). */
+  onGagalLangganan?: (pesan: string) => void;
 }
 
 /** Bagian pusher-js yang benar-benar dipakai (tanpa impor statis). */
@@ -49,6 +51,36 @@ interface PusherLike {
   };
   disconnect: () => void;
   unsubscribe: (channel: string) => void;
+}
+
+/** `bind` opsional di sebagian tipe; jangan sampai melempar bila tak ada. */
+function bindJikaAda(
+  channel: { bind: (event: string, cb: (data: unknown) => void) => void },
+  event: string,
+  cb: (data: unknown) => void
+): void {
+  try {
+    channel.bind(event, cb);
+  } catch {
+    /* tipe channel tidak mendukung event internal */
+  }
+}
+
+/** Ambil pesan yang bisa dibaca manusia dari payload galat Pusher. */
+function pesanGalat(kenapa: unknown): string {
+  if (typeof kenapa === "string") {
+    return kenapa;
+  }
+
+  if (kenapa && typeof kenapa === "object") {
+    const obj = kenapa as Record<string, unknown>;
+    const isi = obj.message ?? obj.error ?? obj.status;
+    if (typeof isi === "string" && isi.trim() !== "") {
+      return isi;
+    }
+  }
+
+  return "Langganan channel notifikasi ditolak server.";
 }
 
 export class KlienRealtime {
@@ -135,6 +167,23 @@ export class KlienRealtime {
 
     try {
       const channel = this.pusher.subscribe(nama);
+
+      // Kegagalan langganan (auth ditolak 403, realtime mati 503, respons
+      // bukan JSON) TIDAK boleh berakhir sebagai koneksi "terhubung" yang
+      // diam-diam tidak menerima event. Tanpa binding ini, gejalanya persis
+      // seperti bug yang dilaporkan: WebSocket nyambung, event tidak pernah
+      // masuk, tanpa pesan apa pun.
+      const gagalLangganan = (kenapa: unknown) => {
+        this.setStatus("gagal");
+        try {
+          this.opsi.onGagalLangganan?.(pesanGalat(kenapa));
+        } catch {
+          /* abaikan */
+        }
+      };
+
+      bindJikaAda(channel, "pusher:subscription_error", gagalLangganan);
+      bindJikaAda(channel, "pusher:error", gagalLangganan);
 
       for (const event of EVENT_YANG_DIBIND) {
         channel.bind(event, (data: unknown) => this.terima(event, data, nama));

@@ -1,4 +1,6 @@
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from "expo-audio";
+import { Platform } from "react-native";
 
 /**
  * Bunyi bell untuk notifikasi realtime.
@@ -7,17 +9,34 @@ import { createAudioPlayer, setAudioModeAsync, type AudioPlayer } from "expo-aud
  * callback jaringan (bukan render komponen), dan satu pemutar dipakai bersama
  * seluruh aplikasi.
  *
- * Batasan browser (react-native-web): audio baru boleh berbunyi setelah
- * interaksi pengguna pertama. Karena itu:
- * - `bukaKunciAudio()` dipanggil pada sentuhan pertama (lihat
- *   `useNotifikasiRealtime`), dan
- * - `putarBell()` TIDAK melempar error bila diblokir — ia hanya mencatat
- *   status `tertunda` supaya pemanggil bisa memutuskan menampilkan toast saja.
+ * Batasan per platform (inilah bedanya web dan native):
+ * - **Web (react-native-web)**: browser menolak audio sebelum interaksi
+ *   pengguna pertama. `bukaKunciAudio()` dipanggil pada sentuhan/klik pertama
+ *   (`pasangPembukaAudio`), dan `putarBell()` mengembalikan `tertunda` alih-alih
+ *   melempar error.
+ * - **Android/iOS**: TIDAK ADA kebijakan autoplay. Kunci audio harus dianggap
+ *   terbuka sejak awal — kalau tidak, bell tidak akan pernah berbunyi. Dulu
+ *   `sudahDibuka` hanya di-set oleh handler `document`, yang tidak ada di
+ *   native, sehingga APK Android tidak pernah membunyikan bell sama sekali.
+ *
+ * Preferensi pengguna (toggle suara) disimpan di AsyncStorage supaya pilihan
+ * "matikan bell" bertahan setelah aplikasi ditutup.
  */
 
+const KUNCI_PREFERENSI_SUARA = "@notifikasi_suara_aktif";
+
 let pemutar: AudioPlayer | null = null;
-let sudahDibuka = false;
 let sedangMemuat = false;
+
+/**
+ * Status kunci audio. Di native langsung `true` karena tidak ada kebijakan
+ * autoplay yang perlu ditembus.
+ */
+let sudahDibuka = Platform.OS !== "web";
+
+/** Preferensi pengguna; `true` = bell boleh berbunyi. */
+let preferensiSuara = true;
+let preferensiDimuat = false;
 
 /** Status hasil percobaan memutar bunyi. */
 export type StatusBell = "diputar" | "tertunda" | "gagal" | "dimatikan";
@@ -39,7 +58,6 @@ function pastikanPemutar(): AudioPlayer | null {
   sedangMemuat = true;
 
   try {
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
     const sumber = require("../../assets/sounds/bell.wav");
     pemutar = createAudioPlayer(sumber);
     void setAudioModeAsync({ playsInSilentMode: true }).catch(() => {
@@ -67,13 +85,22 @@ export function bukaKunciAudio(): void {
 let pembukaTerpasang = false;
 
 /**
- * Pasang pembuka otomatis sekali jalan: sentuhan/klik/keyboard pertama di
- * mana pun membuka kunci audio. Ini yang membuat bell pada notifikasi
- * BERIKUTNYA berbunyi walau notifikasi pertama tiba sebelum ada interaksi.
+ * Pasang pembuka otomatis sekali jalan.
  *
- * Aman dipanggil berulang; tidak melakukan apa pun di native (tidak perlu).
+ * - Web: sentuhan/klik/keyboard pertama di mana pun membuka kunci audio,
+ *   sehingga bell pada notifikasi BERIKUTNYA berbunyi walau notifikasi
+ *   pertama tiba sebelum ada interaksi.
+ * - Native: tidak ada kebijakan autoplay, jadi pemutar langsung disiapkan
+ *   (tanpa menunggu interaksi) supaya notifikasi pertama pun berbunyi.
+ *
+ * Aman dipanggil berulang.
  */
 export function pasangPembukaAudio(): void {
+  if (Platform.OS !== "web") {
+    bukaKunciAudio();
+    return;
+  }
+
   if (pembukaTerpasang || typeof document === "undefined" || typeof document.addEventListener !== "function") {
     return;
   }
@@ -92,9 +119,61 @@ export function pasangPembukaAudio(): void {
   document.addEventListener("touchstart", buka);
 }
 
-/** True bila audio sudah pernah "dibuka" lewat interaksi pengguna. */
+/** True bila audio sudah "dibuka" (web: interaksi; native: selalu) & termuat. */
 export function audioSiap(): boolean {
   return sudahDibuka && pemutar !== null;
+}
+
+/**
+ * Baca preferensi suara pengguna dari penyimpanan (sekali).
+ *
+ * Kegagalan storage tidak boleh menjatuhkan aplikasi → default tetap "bunyi".
+ */
+export async function muatPreferensiSuara(): Promise<boolean> {
+  if (preferensiDimuat) {
+    return preferensiSuara;
+  }
+
+  preferensiDimuat = true;
+
+  try {
+    const tersimpan = await AsyncStorage.getItem(KUNCI_PREFERENSI_SUARA);
+    if (tersimpan !== null) {
+      preferensiSuara = tersimpan !== "0";
+    }
+  } catch {
+    /* pakai default */
+  }
+
+  return preferensiSuara;
+}
+
+/** True bila bell diizinkan oleh pengguna. */
+export function suaraAktif(): boolean {
+  return preferensiSuara;
+}
+
+/**
+ * Ubah preferensi suara (dipakai tombol toggle di UI).
+ *
+ * @returns nilai baru
+ */
+export async function setSuaraAktif(aktif: boolean): Promise<boolean> {
+  preferensiSuara = aktif;
+  preferensiDimuat = true;
+
+  try {
+    await AsyncStorage.setItem(KUNCI_PREFERENSI_SUARA, aktif ? "1" : "0");
+  } catch {
+    /* preferensi tetap berlaku untuk sesi ini */
+  }
+
+  // Menyalakan suara adalah interaksi pengguna → sekaligus buka kunci audio.
+  if (aktif) {
+    bukaKunciAudio();
+  }
+
+  return preferensiSuara;
 }
 
 /**
@@ -103,7 +182,7 @@ export function audioSiap(): boolean {
  * @param aktif false bila admin mematikan bunyi di pengaturan → `dimatikan`.
  */
 export async function putarBell(aktif = true): Promise<StatusBell> {
-  if (!aktif) {
+  if (!aktif || !preferensiSuara) {
     return "dimatikan";
   }
 
@@ -136,5 +215,5 @@ export async function lepasBell(): Promise<void> {
   }
 
   pemutar = null;
-  sudahDibuka = false;
+  sudahDibuka = Platform.OS !== "web";
 }

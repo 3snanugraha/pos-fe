@@ -111,7 +111,7 @@ export function useNotifikasiRealtime(opsi: {
   return { status, jumlahBelumDibaca, resetBelumDibaca, bukaKunciAudio };
 }
 
-/** Token pelanggan (disimpan `httpClient` setelah login). */
+/** Token pelanggan (disimpan oleh `auth.ts` setelah login). */
 export const ambilTokenPelanggan = () => AsyncStorage.getItem("auth_token");
 
 /** Token staf — key terpisah supaya login pelanggan tidak menimpanya. */

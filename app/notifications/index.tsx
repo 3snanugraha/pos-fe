@@ -11,8 +11,8 @@ import { teks } from "../../src/lib/i18n";
 import { colors } from "../../src/theme/tokens";
 import { apiService } from "../../services/apiService";
 import type { Notification } from "../../services/types";
-import { ambilTokenPelanggan, useNotifikasiRealtime } from "../../src/lib/realtime/useNotifikasiRealtime";
-import type { NotifikasiRealtime } from "../../services/realtime/eventMapping";
+import { useNotifikasiMasuk, useRealtime, type PesanRealtime } from "../../src/lib/realtime/RealtimeProvider";
+import { TombolSuara } from "../../src/components/notifikasi/TombolSuara";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 import { kembaliAman } from "../../src/lib/navigasi";
 
@@ -71,14 +71,17 @@ const NotificationsScreen = () => {
   }, [loadNotifications]);
 
   /**
-   * Realtime: notifikasi baru masuk lewat Pusher (channel privat pelanggan).
+   * Realtime: notifikasi baru masuk lewat Pusher (channel privat akun ini).
    *
    * Baris ditambahkan langsung ke daftar + badge dihitung ulang, lalu daftar
    * disegarkan sekali dari server supaya id/urutan resmi yang dipakai
-   * (penting untuk "tandai dibaca"). Bunyi bell diputar oleh hook.
+   * (penting untuk "tandai dibaca"). Bell diputar sekali di provider, jadi di
+   * sini tidak perlu memutarnya lagi (dulu berisiko dobel).
    */
   const tanganiRealtime = useCallback(
-    (notifikasi: NotifikasiRealtime) => {
+    (pesan: PesanRealtime) => {
+      const notifikasi = pesan.notifikasi;
+
       setNotifications((prev) => {
         const sudahAda = prev.some(
           (n) => (notifikasi.notifikasiId && n.id === notifikasi.notifikasiId) ||
@@ -111,10 +114,10 @@ const NotificationsScreen = () => {
     [loadNotifications]
   );
 
-  const { status: statusRealtime, jumlahBelumDibaca, resetBelumDibaca } = useNotifikasiRealtime({
-    ambilToken: ambilTokenPelanggan,
-    onNotifikasi: tanganiRealtime,
-  });
+  useNotifikasiMasuk(tanganiRealtime);
+
+  const { status: statusRealtime, jumlahBelumDibaca, resetBelumDibaca, galat: galatRealtime } =
+    useRealtime();
 
   // Badge ini milik layar notifikasi → begitu layar dibuka, hitungan live
   // dianggap sudah dilihat (server tetap sumber kebenaran untuk `dibaca`).
@@ -206,6 +209,7 @@ const NotificationsScreen = () => {
       <AppBar
         title={teks.judul.notifications}
         onBack={kembali}
+        right={<TombolSuara />}
         onPressMenu={notifications.length > 0 ? () => setDialog("menu") : undefined}
       />
 
@@ -245,6 +249,17 @@ const NotificationsScreen = () => {
               </View>
             ) : null}
           </View>
+
+          {/* Realtime gagal (auth channel ditolak / realtime dimatikan server):
+              tampilkan sebabnya. Tanpa ini kegagalan hanya terlihat sebagai
+              "tidak ada notifikasi masuk" tanpa penjelasan apa pun. */}
+          {galatRealtime ? (
+            <View className="mx-4 mb-2 rounded-md border border-warning-100 bg-warning-50 p-3">
+              <Text className="font-inter text-xs text-warning-700" maxFontSizeMultiplier={1.3}>
+                {teks.notifikasi.realtimeGagal}: {galatRealtime}
+              </Text>
+            </View>
+          ) : null}
 
           {tampil.length === 0 ? (
             <EmptyState
