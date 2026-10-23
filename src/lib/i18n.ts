@@ -385,6 +385,8 @@ export const teks = {
     semuaDibaca: "Semua notifikasi sudah dibaca.",
     menu: "Menu notifikasi",
     belumDibacaA11y: "Belum dibaca",
+    realtimeAktif: "Realtime aktif",
+    baru: "baru",
   },
 
   /** Dialog izin notifikasi (soft-prompt, guideline §3.17). */
@@ -831,6 +833,11 @@ export const teks = {
     verifikasiGagal: "Verifikasi gagal.",
     tolakGagal: "Penolakan gagal.",
     keluar: "Keluar sesi staf",
+    orderBaruMasuk: "Order baru masuk — daftar diperbarui otomatis.",
+    realtime: {
+      aktif: "Realtime aktif",
+      mati: "Realtime tidak aktif",
+    },
   },
 
   satuan: {

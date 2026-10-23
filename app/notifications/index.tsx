@@ -11,6 +11,8 @@ import { teks } from "../../src/lib/i18n";
 import { colors } from "../../src/theme/tokens";
 import { apiService } from "../../services/apiService";
 import type { Notification } from "../../services/types";
+import { ambilTokenPelanggan, useNotifikasiRealtime } from "../../src/lib/realtime/useNotifikasiRealtime";
+import type { NotifikasiRealtime } from "../../services/realtime/eventMapping";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 import { kembaliAman } from "../../src/lib/navigasi";
 
@@ -67,6 +69,58 @@ const NotificationsScreen = () => {
   useEffect(() => {
     void loadNotifications();
   }, [loadNotifications]);
+
+  /**
+   * Realtime: notifikasi baru masuk lewat Pusher (channel privat pelanggan).
+   *
+   * Baris ditambahkan langsung ke daftar + badge dihitung ulang, lalu daftar
+   * disegarkan sekali dari server supaya id/urutan resmi yang dipakai
+   * (penting untuk "tandai dibaca"). Bunyi bell diputar oleh hook.
+   */
+  const tanganiRealtime = useCallback(
+    (notifikasi: NotifikasiRealtime) => {
+      setNotifications((prev) => {
+        const sudahAda = prev.some(
+          (n) => (notifikasi.notifikasiId && n.id === notifikasi.notifikasiId) ||
+            (n.tipe === notifikasi.tipe && String(n.id) === String(notifikasi.orderId))
+        );
+
+        if (sudahAda) {
+          return prev;
+        }
+
+        const waktu = notifikasi.waktu ?? new Date().toISOString();
+
+        const baru: Notification = {
+          // Id negatif = baris optimistis; diganti id server setelah refresh.
+          id: notifikasi.notifikasiId ?? -Date.now(),
+          judul: notifikasi.judul,
+          pesan: notifikasi.pesan,
+          tipe: keTipeNotifikasi(notifikasi.tipe),
+          is_read: false,
+          tanggal_kirim: waktu,
+          created_at: waktu,
+          updated_at: waktu,
+        };
+
+        return [baru, ...prev];
+      });
+
+      void loadNotifications();
+    },
+    [loadNotifications]
+  );
+
+  const { status: statusRealtime, jumlahBelumDibaca, resetBelumDibaca } = useNotifikasiRealtime({
+    ambilToken: ambilTokenPelanggan,
+    onNotifikasi: tanganiRealtime,
+  });
+
+  // Badge ini milik layar notifikasi → begitu layar dibuka, hitungan live
+  // dianggap sudah dilihat (server tetap sumber kebenaran untuk `dibaca`).
+  useEffect(() => {
+    resetBelumDibaca();
+  }, [resetBelumDibaca]);
 
   const onRefresh = async () => {
     setRefreshing(true);
@@ -174,6 +228,22 @@ const NotificationsScreen = () => {
           <View className="flex-row gap-2 px-4 py-3">
             {chip("all", teks.notifikasi.semua, notifications.length)}
             {chip("unread", teks.notifikasi.belumDibaca, unreadCount)}
+            {statusRealtime === "terhubung" || jumlahBelumDibaca > 0 ? (
+              <View
+                className="min-h-[44px] flex-1 flex-row items-center justify-end gap-1.5"
+                accessibilityLabel={teks.notifikasi.realtimeAktif}
+              >
+                <View className="h-1.5 w-1.5 rounded-full bg-success-500" />
+                <Text
+                  className="font-inter-medium text-xs text-neutral-500"
+                  maxFontSizeMultiplier={1.3}
+                >
+                  {jumlahBelumDibaca > 0
+                    ? `${jumlahBelumDibaca} ${teks.notifikasi.baru}`
+                    : teks.notifikasi.realtimeAktif}
+                </Text>
+              </View>
+            ) : null}
           </View>
 
           {tampil.length === 0 ? (
@@ -281,5 +351,26 @@ const NotificationsScreen = () => {
     </SafeAreaView>
   );
 };
+
+/**
+ * Tipe notifikasi aplikasi (`order` | `promo` | `system` | ...) dari tipe
+ * domain backend (`new_order`, `order_verified`, ...). Warna ikon
+ * `NotificationItem` bergantung pada nilai ini.
+ */
+function keTipeNotifikasi(tipe: string): Notification["tipe"] {
+  if (tipe.startsWith("order") || tipe === "new_order") {
+    return "order";
+  }
+
+  if (tipe === "promo") {
+    return "promo";
+  }
+
+  if (tipe === "payment") {
+    return "payment";
+  }
+
+  return "system";
+}
 
 export default NotificationsScreen;

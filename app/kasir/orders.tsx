@@ -44,6 +44,7 @@ import {
 } from "../../services/staffSession";
 import type { Transaction } from "../../services/types";
 import { useOrderExpiry } from "../../utils/orderExpiry";
+import { ambilTokenStaf, useNotifikasiRealtime } from "../../src/lib/realtime/useNotifikasiRealtime";
 
 interface KasirOrder {
   transaction: Transaction;
@@ -149,6 +150,24 @@ export default function KasirOrdersScreen() {
       if (user) loadOrders();
     })();
   }, [loadOrders]);
+
+  /**
+   * Realtime: order baru dari aplikasi mobile / pelanggan.
+   *
+   * Channel-nya privat untuk tim, jadi setiap event pasti relevan: daftar
+   * order pending langsung dimuat ulang (tanpa menunggu tarik manual) dan
+   * bell diputar oleh hook. Hanya aktif setelah login staf.
+   */
+  const tanganiOrderBaru = useCallback(() => {
+    setActionMessage({ tipe: "sukses", teks: teks.kasir.orderBaruMasuk });
+    void loadOrders();
+  }, [loadOrders]);
+
+  useNotifikasiRealtime({
+    ambilToken: ambilTokenStaf,
+    onNotifikasi: tanganiOrderBaru,
+    aktif: !!staff,
+  });
 
   const handleLogin = async () => {
     if (!email.trim() || !password) {

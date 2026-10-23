@@ -12,6 +12,8 @@ import { colors } from "../../src/theme/tokens";
 import { useCart } from "../../contexts/CartContext";
 import { apiService } from "../../services/apiService";
 import type { Order } from "../../services/types";
+import { ambilTokenPelanggan, useNotifikasiRealtime } from "../../src/lib/realtime/useNotifikasiRealtime";
+import type { NotifikasiRealtime } from "../../services/realtime/eventMapping";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 import { kembaliAman } from "../../src/lib/navigasi";
 
@@ -97,6 +99,25 @@ export default function OrderHistoryScreen() {
     setLoading(true);
     setFilter(kunci);
   };
+
+  /**
+   * Realtime: status order berubah (diverifikasi / ditolak kasir).
+   *
+   * Hanya order milik pelanggan ini yang datang (channel privat per
+   * pelanggan), jadi daftar langsung dimuat ulang + banner singkat ditampilkan.
+   */
+  const tanganiRealtime = useCallback((notifikasi: NotifikasiRealtime) => {
+    setPesan({ tipe: "sukses", isi: notifikasi.judul });
+    void loadOrders(filter).then((hasil) => {
+      setOrders(hasil.baris);
+      setError(hasil.galat);
+    });
+  }, [filter, loadOrders]);
+
+  useNotifikasiRealtime({
+    ambilToken: ambilTokenPelanggan,
+    onNotifikasi: tanganiRealtime,
+  });
 
   const onRefresh = async () => {
     setRefreshing(true);

@@ -124,6 +124,16 @@ export const API_ENDPOINTS = {
     logout: "/logout",
   },
 
+  /**
+   * Notifikasi realtime (Pusher).
+   * `config` hanya mengembalikan key + cluster + nama channel (tanpa secret);
+   * `auth` memberi tanda tangan untuk channel privat.
+   */
+  realtime: {
+    config: "/notification-config",
+    auth: "/notification-auth",
+  },
+
   // Customer Management
   customer: {
     addresses: "/customer/addresses",
