@@ -3,6 +3,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useEffect, useRef, useState } from "react";
 import {
   Pressable,
+  Platform,
   ScrollView,
   Text,
   View,
@@ -10,6 +11,7 @@ import {
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
+  type TextStyle,
 } from "react-native";
 import { teks } from "../../lib/i18n";
 import { useReduceMotion } from "../../lib/motion";
@@ -41,15 +43,13 @@ export type BannerCarouselProps = {
 const TINGGI = 148;
 const INTERVAL = 4000;
 
-/** Porsi lebar kartu untuk kolom teks; sisanya untuk foto. */
-const PORSI_TEKS = 0.52;
+/** Porsi lebar kartu untuk kolom teks; sisanya tetap memperlihatkan foto. */
+const PORSI_TEKS = 0.62;
 
 /**
  * Hex (#RGB / #RRGGBB) → rgba() dengan alfa tertentu.
  *
- * Dipakai untuk scrim banner. Alfa sengaja lebih rendah daripada warna solid
- * (permintaan pemilik: "overlay opacity-nya sedikit"), tetapi tetap pekat di
- * area teks supaya kontras judul tidak turun (guideline §2.1 & §7).
+ * Dipakai untuk bayangan teks di atas foto (BUKAN scrim/gradasi).
  */
 export function denganAlfa(hex: string, alfa: number): string {
   const bersih = hex.replace("#", "");
@@ -90,8 +90,14 @@ export function denganAlfa(hex: string, alfa: number): string {
  * - `snapToInterval` sebagai ganti `pagingEnabled`, yang tidak didukung
  *   react-native-web sehingga geser tidak pernah "mendarat" di satu kartu.
  *
- * Overlay: scrim horizontal berwarna tema — alfa 0.92 di sisi teks lalu
- * luruh ke 0 sebelum sisi kanan, jadi foto tetap terlihat.
+ * FOTO TANPA MASKING (bug pemilik 2026-10-23):
+ * Dulu ada DUA lapisan di atas foto — gradien dasar tema + scrim horizontal
+ * selebar ±62 % kartu — sehingga foto banner tampak biru dan tidak utuh.
+ * Sekarang: bila banner punya `gambar_url` foto mengisi SELURUH kartu
+ * (`cover`) dan TIDAK ada satu pun lapisan gradien dirender di atasnya
+ * (ditandai `testID="banner-foto-tanpa-gradasi"` agar bisa diverifikasi di
+ * DOM web). Gradien tema hanya menjadi latar pengganti saat foto tidak ada.
+ * Kontras judul/deskripsi dijaga `textShadow` tipis, bukan lapisan gradasi.
  *
  * Auto-play 4 dtk — DINONAKTIFKAN bila Reduce Motion aktif (guideline §7).
  * Geser manual tetap bekerja dan memperbarui indeks.
@@ -163,18 +169,24 @@ export function BannerCarousel({
   const warnaIsi = gelap ? "text-white" : "text-neutral-700";
   const gradien = (tema?.banner ?? [colors.primary500, colors.primary600]) as [string, string];
 
-  // Scrim: warna gelap tema di area teks, lalu luruh ke 0 sebelum sisi kanan
-  // sehingga foto tetap terlihat. Alfa dipilih dari perhitungan kontras
-  // (putih di atas komposit, foto terang #FED7AA sebagai kasus terburuk):
-  //   primary-600 α.86 → 3,6:1 (kurang untuk teks 16 px)
-  //   primary-700 α.86 → 4,9:1 (lolos AA)
-  // Karena itu tema terang memakai primary-700, bukan stop gradien 600.
-  const warnaScrim = gelap ? colors.primary700 : gradien[1];
-  const scrim: readonly [string, string, string] = [
-    denganAlfa(warnaScrim, gelap ? 0.88 : 0.8),
-    denganAlfa(warnaScrim, gelap ? 0.8 : 0.42),
-    denganAlfa(warnaScrim, 0),
-  ];
+  // Bayangan teks pengganti scrim. Warna bayangan berlawanan dengan warna
+  // teks supaya judul tetap terbaca di atas foto terang maupun gelap:
+  // teks putih → bayangan hitam 55 %; teks gelap → bayangan putih 65 %.
+  //
+  // Di web, prop `textShadow*` sudah deprecated (react-native-web memetakannya
+  // ke CSS `text-shadow` sambil memperingatkan), jadi web memakai shorthand
+  // `textShadow`; native tetap memakai tiga prop bertipe `TextStyle`.
+  const bayangan: TextStyle = (() => {
+    const warna = gelap ? denganAlfa("#000000", 0.55) : denganAlfa("#FFFFFF", 0.65);
+    if (Platform.OS === "web") {
+      return { textShadow: `0 1px 4px ${warna}` } as unknown as TextStyle;
+    }
+    return {
+      textShadowColor: warna,
+      textShadowOffset: { width: 0, height: 1 },
+      textShadowRadius: 4,
+    };
+  })();
 
   return (
     <View
@@ -195,100 +207,95 @@ export function BannerCarousel({
         contentContainerStyle={{ paddingHorizontal }}
         accessibilityLabel={teks.beranda.geserBanner}
       >
-        {banners.map((banner, index) => (
-          <View key={banner.id} style={{ width: lebarKartu }} className="shrink-0">
-            <View
-              className="overflow-hidden"
-              style={{ height: TINGGI, borderRadius: radius.lg }}
-              accessible
-              accessibilityRole="summary"
-              accessibilityLabel={`${teks.beranda.bannerLabel
-                .replace("{index}", String(index + 1))
-                .replace("{total}", String(jumlah))}. ${banner.judul_banner}`}
-            >
-              {/* Dasar: gradien tema (guideline §3.7). */}
-              <LinearGradient
-                colors={gradien}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 1 }}
-                style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
-                pointerEvents="none"
-              />
+        {banners.map((banner, index) => {
+          const punyaFoto = Boolean(banner.gambar_url);
 
-              {/* Foto: dipotong di sisi kanan, posisi absolut → tidak
-                  menambah lebar maupun tinggi konten. */}
-              {banner.gambar_url ? (
-                <Image
-                  source={{ uri: banner.gambar_url }}
-                  style={{
-                    position: "absolute",
-                    top: 0,
-                    bottom: 0,
-                    right: 0,
-                    width: `${Math.round((1 - PORSI_TEKS) * 100 + 8)}%`,
-                  }}
-                  contentFit="cover"
-                  transition={150}
-                  accessibilityIgnoresInvertColors
-                />
-              ) : null}
-
-              {/* Scrim halus di atas foto sebelah kiri — alfa turun ke 0
-                  sebelum sisi kanan, jadi foto tetap terlihat. */}
-              <LinearGradient
-                colors={scrim}
-                locations={[0, 0.5, 0.62]}
-                start={{ x: 0, y: 0 }}
-                end={{ x: 1, y: 0 }}
-                style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
-                pointerEvents="none"
-              />
-
-              {/* Teks — lebar dibatasi porsi teks, tinggi dijaga flexShrink. */}
+          return (
+            <View key={banner.id} style={{ width: lebarKartu }} className="shrink-0">
               <View
-                className="absolute bottom-0 left-0 top-0 justify-center px-4 py-3"
-                style={{ width: `${Math.round(PORSI_TEKS * 100 + 6)}%` }}
+                className="overflow-hidden"
+                style={{ height: TINGGI, borderRadius: radius.lg }}
+                accessible
+                accessibilityRole="summary"
+                accessibilityLabel={`${teks.beranda.bannerLabel
+                  .replace("{index}", String(index + 1))
+                  .replace("{total}", String(jumlah))}. ${banner.judul_banner}`}
+                /**
+                 * Penanda QA web: kartu banner berfoto TIDAK boleh punya layer
+                 * gradien. Nilai ini muncul sebagai `data-testid` di DOM
+                 * react-native-web sehingga regresi masking bisa dideteksi.
+                 */
+                testID={punyaFoto ? "banner-foto-tanpa-gradasi" : "banner-latar-gradien"}
               >
-                <Text
-                  className={`font-inter-bold text-base ${warnaJudul}`}
-                  numberOfLines={2}
-                  maxFontSizeMultiplier={1.2}
-                  style={{ flexShrink: 1 }}
-                >
-                  {banner.judul_banner}
-                </Text>
+                {/* Latar gradien tema — HANYA saat banner tidak punya foto, agar
+                    tidak ada lapisan warna di atas/bawah foto. */}
+                {punyaFoto ? null : (
+                  <LinearGradient
+                    colors={gradien}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
+                    pointerEvents="none"
+                  />
+                )}
 
-                {banner.deskripsi ? (
-                  <Text
-                    className={`mt-1 font-inter text-xs ${warnaIsi}`}
-                    numberOfLines={2}
-                    maxFontSizeMultiplier={1.2}
-                    style={{ flexShrink: 1 }}
-                  >
-                    {banner.deskripsi}
-                  </Text>
+                {/* Foto: menutupi SELURUH kartu, tanpa scrim/gradasi di atasnya. */}
+                {punyaFoto ? (
+                  <Image
+                    source={{ uri: banner.gambar_url }}
+                    style={{ position: "absolute", top: 0, right: 0, bottom: 0, left: 0 }}
+                    contentFit="cover"
+                    transition={150}
+                    accessibilityIgnoresInvertColors
+                  />
                 ) : null}
 
-                <Pressable
-                  onPress={() => onPressBanner?.(banner)}
-                  accessibilityRole="button"
-                  accessibilityLabel={`${teks.beranda.bannerCta}: ${banner.judul_banner}`}
-                  className="mt-2 flex-row items-center justify-center self-start rounded-md bg-white px-3 active:opacity-90"
-                  style={{ height: sizes.buttonSm }}
-                  hitSlop={{ top: 6, bottom: 6, left: 0, right: 6 }}
+                {/* Teks: overlay langsung di atas foto; kontras dari textShadow. */}
+                <View
+                  className="absolute bottom-0 left-0 top-0 justify-end px-4 py-3"
+                  style={{ width: `${Math.round(PORSI_TEKS * 100)}%` }}
                 >
                   <Text
-                    className="font-inter-semibold text-xs text-primary-700"
+                    className={`font-inter-bold text-base ${warnaJudul}`}
+                    numberOfLines={2}
                     maxFontSizeMultiplier={1.2}
-                    numberOfLines={1}
+                    style={[{ flexShrink: 1 }, bayangan]}
                   >
-                    {teks.beranda.bannerCta}
+                    {banner.judul_banner}
                   </Text>
-                </Pressable>
+
+                  {banner.deskripsi ? (
+                    <Text
+                      className={`mt-1 font-inter text-xs ${warnaIsi}`}
+                      numberOfLines={2}
+                      maxFontSizeMultiplier={1.2}
+                      style={[{ flexShrink: 1 }, bayangan]}
+                    >
+                      {banner.deskripsi}
+                    </Text>
+                  ) : null}
+
+                  <Pressable
+                    onPress={() => onPressBanner?.(banner)}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${teks.beranda.bannerCta}: ${banner.judul_banner}`}
+                    className="mt-2 flex-row items-center justify-center self-start rounded-md bg-white px-3 active:opacity-90"
+                    style={{ height: sizes.buttonSm }}
+                    hitSlop={{ top: 6, bottom: 6, left: 0, right: 6 }}
+                  >
+                    <Text
+                      className="font-inter-semibold text-xs text-primary-700"
+                      maxFontSizeMultiplier={1.2}
+                      numberOfLines={1}
+                    >
+                      {teks.beranda.bannerCta}
+                    </Text>
+                  </Pressable>
+                </View>
               </View>
             </View>
-          </View>
-        ))}
+          );
+        })}
       </ScrollView>
 
       {/* Dots — 6 pt, aktif memanjang 16 pt primary-600 (guideline §3.7). */}

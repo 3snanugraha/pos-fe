@@ -201,6 +201,17 @@ export interface ProductSearchParams {
 }
 
 // Banner Types
+/** Identitas toko dari `GET /api/public/store-info` (kop struk/faktur PDF). */
+export interface StoreInfo {
+  nama_toko: string;
+  alamat: string;
+  telepon: string;
+  email?: string;
+  website?: string;
+  npwp?: string;
+  logo_url: string | null;
+}
+
 export interface Banner {
   id: number;
   judul_banner: string;
@@ -278,6 +289,8 @@ export interface OrderItem {
   varian_id?: number;
   nama_produk: string;
   nama_varian?: string;
+  /** Satuan jual ("pcs"/"box") bila backend mengirimkannya. */
+  satuan?: string | null;
   jumlah: number;
   harga: number;
   subtotal: number;

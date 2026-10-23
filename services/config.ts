@@ -106,6 +106,8 @@ export const API_ENDPOINTS = {
     productDetail: (id: number) => `/public/products/${id}`,
     categories: "/public/product-categories",
     featuredProducts: "/public/featured-products",
+    /** Identitas toko untuk kop struk/faktur PDF pelanggan. */
+    storeInfo: "/public/store-info",
   },
 
   // Customer Authentication
@@ -209,6 +211,7 @@ export const CACHE_CONFIG = {
     dashboard: "cache_dashboard",
     paymentMethods: "cache_payment_methods",
     featuredProducts: "cache_featured_products",
+    storeInfo: "cache_store_info",
   },
 } as const;
 

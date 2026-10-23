@@ -55,6 +55,30 @@ export class ApiService {
   }
 
   /**
+   * Identitas toko untuk kop struk/faktur PDF pelanggan.
+   *
+   * Sumber tunggal: `ProfilToko` di backend (endpoint publik, tanpa auth).
+   * Hasil di-cache 1 jam — data kop hampir tidak pernah berubah, dan struk
+   * harus tetap bisa dicetak saat jaringan lambat. Kegagalan fetch TIDAK
+   * di-cache; pemanggil memakai fallback nama toko sendiri.
+   */
+  async getStoreInfo(useCache = true): Promise<Types.StoreInfo> {
+    const ambil = async (): Promise<Types.StoreInfo> => {
+      const response = await httpClient.get<Types.StoreInfo>(
+        API_ENDPOINTS.public.storeInfo
+      );
+      if (!response?.data) {
+        throw new Error('store-info kosong');
+      }
+      return response.data;
+    };
+
+    if (!useCache) return ambil();
+
+    return cacheManager.getOrSet('storeInfo', ambil, CACHE_CONFIG.MEDIUM);
+  }
+
+  /**
    * Get product categories with caching
    */
   async getProductCategories(useCache = true): Promise<Types.ProductCategory[]> {

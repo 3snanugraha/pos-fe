@@ -12,7 +12,6 @@ import {
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { useCallback, useEffect, useState } from "react";
 import {
-  Linking,
   RefreshControl,
   ScrollView,
   Text,
@@ -42,14 +41,18 @@ import {
 import { colors } from "../../src/theme/tokens";
 import { kembaliAman } from "../../src/lib/navigasi";
 import { apiService } from "../../services/apiService";
-import type { OrderDetail } from "../../services/types";
+import type { OrderDetail, StoreInfo } from "../../services/types";
 import { useOrderExpiry } from "../../utils/orderExpiry";
 import {
   jenisLabel,
   parseSplitFromCatatan,
   stripSplitFromCatatan,
 } from "../../utils/payment";
-import { printOrderReceipt } from "../../utils/printReceipt";
+import {
+  cetakStrukPelangganPdf,
+  type HasilCetakStruk,
+} from "../../utils/cetakStrukPelanggan";
+import { NAMA_TOKO_CADANGAN } from "../../utils/strukPelanggan";
 
 type DialogBatal = "konfirmasi" | null;
 
@@ -168,63 +171,111 @@ export default function OrderDetailScreen() {
     }
   };
 
+  /**
+   * Identitas toko untuk kop struk PDF.
+   *
+   * Sumber: `GET /api/public/store-info` (ProfilToko di backend). Diambil saat
+   * layar dimuat dan disimpan di state; bila gagal, `null` → kop memakai
+   * fallback 'Toko Kami' (satu-satunya pemakaian nama itu di FE pelanggan).
+   */
+  const [toko, setToko] = useState<StoreInfo | null>(null);
+
+  useEffect(() => {
+    let aktif = true;
+    (async () => {
+      try {
+        const info = await apiService.getStoreInfo();
+        if (aktif) setToko(info);
+      } catch (err) {
+        console.warn("store-info gagal dimuat, kop struk memakai fallback:", err);
+        if (aktif) {
+          setToko(null);
+        }
+      }
+    })();
+    return () => {
+      aktif = false;
+    };
+  }, []);
+
   const handlePrint = async () => {
     if (!order) return;
     setPrinting(true);
     try {
-      // `printReceipt` mengharapkan angka, sedangkan backend mengirim desimal
-      // sebagai string — normalisasi dulu.
-      const hasil = await printOrderReceipt({
-        id: order.id,
-        nomor_transaksi: order.nomor_transaksi,
-        tanggal_transaksi: order.tanggal_transaksi,
-        total_harga: Number(order.total_harga) || 0,
-        total_diskon: Number(order.total_diskon) || 0,
-        total_bayar: Number(order.total_bayar) || 0,
-        status: order.status,
-        metode_pembayaran: {
-          nama: order.metode_pembayaran?.nama ?? teks.checkout.cod,
-          jenis: order.metode_pembayaran?.jenis ?? "tunai",
-        },
-        alamat_pengiriman: order.alamat_pengiriman ?? null,
-        catatan: stripSplitFromCatatan(order.catatan) || null,
-        items: (order.items ?? []).map((item) => ({
-          nama_produk: item.nama_produk,
-          nama_varian: item.nama_varian ?? null,
-          jumlah: item.jumlah,
-          harga: Number(item.harga) || 0,
-          subtotal: Number(item.subtotal) || 0,
-        })),
-      });
-
-      if (hasil.ok) {
-        if (hasil.mode === "browser") {
-          setPesanAksi({
-            judul: teks.pesanan.struk.diunduhJudul,
-            isi: teks.pesanan.struk.diunduhDeskripsi,
-          });
+      /**
+       * Ambil ulang identitas toko saat mencetak bila fetch awal gagal —
+       * jaringan bisa pulih sebelum pelanggan menekan tombol.
+       */
+      let identitas = toko;
+      if (!identitas) {
+        try {
+          identitas = await apiService.getStoreInfo(false);
+          setToko(identitas);
+        } catch {
+          identitas = null;
         }
-        return;
       }
 
-      if (hasil.reason === "no-app") {
+      const hasil: HasilCetakStruk = await cetakStrukPelangganPdf({
+        toko: {
+          nama_toko: identitas?.nama_toko?.trim() || NAMA_TOKO_CADANGAN,
+          alamat: identitas?.alamat ?? "",
+          telepon: identitas?.telepon ?? "",
+          email: identitas?.email ?? null,
+          website: identitas?.website ?? null,
+          npwp: identitas?.npwp ?? null,
+          logo_url: identitas?.logo_url ?? null,
+        },
+        order: {
+          nomor_transaksi: order.nomor_transaksi || `#${order.id}`,
+          tanggal_transaksi: order.tanggal_transaksi || order.created_at,
+          status,
+          status_pembayaran: order.status_pembayaran ?? null,
+          alamat_pengiriman: order.alamat_pengiriman ?? null,
+          catatan: stripSplitFromCatatan(order.catatan) || null,
+          total_harga: Number(order.total_harga) || 0,
+          total_diskon: Number(order.total_diskon) || 0,
+          total_bayar: Number(order.total_bayar) || 0,
+          metode_pembayaran: metode
+            ? {
+                nama: metode.nama ?? teks.checkout.cod,
+                jenis: metode.jenis ?? null,
+                nomor_rekening: metode.nomor_rekening ?? null,
+                atas_nama: metode.atas_nama ?? null,
+              }
+            : null,
+          items: (order.items ?? []).map((item) => ({
+            nama_produk: item.nama_produk,
+            nama_varian: item.nama_varian ?? null,
+            satuan: item.satuan ?? null,
+            jumlah: item.jumlah,
+            harga: Number(item.harga) || 0,
+            subtotal: Number(item.subtotal) || 0,
+          })),
+        },
+        rincianSplit: splitInfo,
+      });
+
+      if (!hasil.ok) {
         setPesanAksi({
-          judul: teks.pesanan.struk.appJudul,
-          isi: teks.pesanan.struk.appDeskripsi,
-          aksi: {
-            label: teks.pesanan.struk.bukaPlayStore,
-            onPress: () => {
-              Linking.openURL("market://details?id=ru.a402d.rawbtprinter").catch(() => {});
-            },
-          },
+          judul: teks.umum.gagal,
+          isi: hasil.message || teks.pesanan.struk.gagal,
         });
         return;
       }
 
-      setPesanAksi({
-        judul: teks.umum.gagal,
-        isi: hasil.message || teks.pesanan.struk.gagal,
-      });
+      // Pesan sukses hanya untuk mode yang memang menutup sendiri; di Android
+      // dialog berbagi sudah menjadi umpan baliknya.
+      if (hasil.mode === "web") {
+        setPesanAksi({
+          judul: teks.pesanan.struk.webJudul,
+          isi: teks.pesanan.struk.webDeskripsi,
+        });
+      }
+
+      if (!identitas) {
+        console.warn(teks.pesanan.struk.tokoCadangan);
+      }
     } catch (err) {
       console.error("Print error:", err);
       setPesanAksi({ judul: teks.umum.gagal, isi: teks.pesanan.struk.gagal });

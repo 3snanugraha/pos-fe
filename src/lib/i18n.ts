@@ -627,6 +627,15 @@ export const teks = {
         "Untuk mencetak struk, silakan install aplikasi RawBT atau Thermer dari Play Store.",
       bukaPlayStore: "Buka Play Store",
       gagal: "Gagal mencetak struk.",
+      /** PDF struk pelanggan (bukan thermal). */
+      pdfJudul: "Struk PDF dibuat",
+      pdfDeskripsi:
+        "Struk disimpan sebagai PDF dan siap dibagikan. Simpan atau kirim lewat aplikasi pilihan Anda.",
+      webJudul: "Struk siap dicetak",
+      webDeskripsi:
+        "Dialog cetak terbuka. Pilih \u201cSave as PDF\u201d / \u201cSimpan sebagai PDF\u201d untuk menyimpan struk.",
+      tokoCadangan:
+        "Identitas toko tidak bisa dimuat. Kop struk memakai nama sementara \u201cToko Kami\u201d.",
     },
   },
 
