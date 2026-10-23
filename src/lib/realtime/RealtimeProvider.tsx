@@ -6,6 +6,8 @@ import type { NotifikasiRealtime } from "../../../services/realtime/eventMapping
 import {
   audioSiap,
   bukaKunciAudio,
+  daftarkanSiapBunyi,
+  diagnosaBell,
   muatPreferensiSuara,
   pasangPembukaAudio,
   putarBell,
@@ -61,6 +63,47 @@ interface NilaiKonteks {
 }
 
 const KonteksRealtime = createContext<NilaiKonteks | null>(null);
+
+/**
+ * Jembatan uji (khusus `__DEV__`): pengirim notifikasi palsu.
+ *
+ * Kenapa ada di kode produk? Karena bug "notifikasi hanya muncul di
+ * /kasir/orders" hanya bisa dibuktikan dengan memicu event sungguhan di
+ * beberapa rute. Tanpa jembatan ini, uji web menuntut backend + Pusher hidup
+ * (dan kredensial). Saat `__DEV__` false (build release) seluruh blok ini
+ * dibuang oleh Metro, jadi tidak ada permukaan tambahan di APK.
+ */
+let pengirimUjiAktif: ((notifikasi: NotifikasiRealtime) => void) | null = null;
+
+/**
+ * Kirim notifikasi palsu ke semua listener (sama persis dengan jalur event
+ * Pusher: badge, bell, toast, dan penyegaran layar).
+ *
+ * @returns false bila provider belum terpasang.
+ */
+export function kirimNotifikasiUji(notifikasi: Partial<NotifikasiRealtime> = {}): boolean {
+  if (!pengirimUjiAktif) {
+    return false;
+  }
+
+  pengirimUjiAktif({
+    notifikasiId: 9001,
+    tipe: "new_order",
+    judul: "Penerimaan Order Baru",
+    pesan: "Order ORD-1 dari Budi (2 item) menunggu verifikasi kasir.",
+    jenis: "warning",
+    target: "kasir-order-baru",
+    channel: "private-orders",
+    orderId: 91,
+    nomorTransaksi: "ORD-20261024-0091",
+    statusOrder: "pending",
+    bunyikanSuara: true,
+    waktu: new Date().toISOString(),
+    ...notifikasi,
+  });
+
+  return true;
+}
 
 /**
  * Token akun aktif.
@@ -146,14 +189,77 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       if (!hidup) return;
 
       setSuara(tersimpan);
+      // Native: menyiapkan pemutar sekarang supaya notifikasi pertama berbunyi.
+      // Web: memasang pembuka satu kali di level dokumen — tap di layar mana
+      // pun cukup, TombolSuara TIDAK wajib ditekan lebih dulu.
       pasangPembukaAudio();
       setSiapBunyi(audioSiap());
     })();
 
+    // Status kesiapan audio berubah asinkron (aset selesai dimuat / kunci web
+    // terbuka setelah interaksi) — tanpa langganan ini UI akan menampilkan
+    // "bell belum siap" selamanya.
+    const lepas = daftarkanSiapBunyi((siap) => setSiapBunyi(siap));
+
     return () => {
       hidup = false;
+      lepas();
     };
   }, []);
+
+  /**
+   * Satu pintu masuk untuk SEMUA notifikasi (Pusher maupun jembatan uji).
+   *
+   * Dipisah dari `new KlienRealtime` supaya toast global, badge, dan bell
+   * pasti berperilaku sama apa pun sumber eventnya — dulu jalur bell hanya
+   * hidup di layar kasir sehingga rute lain sunyi.
+   */
+  const terimaNotifikasi = useCallback((notifikasi: NotifikasiRealtime) => {
+    urutRef.current += 1;
+    const pesan: PesanRealtime = { notifikasi, urut: urutRef.current };
+
+    setJumlahBelumDibaca((n) => n + 1);
+    setTerakhir(pesan);
+
+    // Bell untuk SETIAP notifikasi baru (bukan hanya order).
+    // putarBell tidak pernah melempar; status "tertunda" (web, belum ada
+    // interaksi) diputar otomatis begitu kunci audio terbuka.
+    void putarBell(notifikasi.bunyikanSuara).then((hasil) => {
+      if (hasil === "diputar" || hasil === "dimatikan") {
+        setSiapBunyi(audioSiap());
+      }
+    });
+
+    listenerRef.current.forEach((listener) => {
+      try {
+        listener(pesan);
+      } catch {
+        /* satu listener rusak tidak boleh memutus koneksi */
+      }
+    });
+  }, []);
+
+  // Jembatan uji hanya hidup di __DEV__ (dibuang Metro di build release).
+  useEffect(() => {
+    if (!__DEV__) {
+      return;
+    }
+
+    pengirimUjiAktif = terimaNotifikasi;
+
+    // Dipakai QA web dari console browser:
+    //   kirimNotifikasiUji({ nomorTransaksi: "ORD-1" })
+    // Ada HANYA di __DEV__; build release tidak memuatnya.
+    (globalThis as any).kirimNotifikasiUji = kirimNotifikasiUji;
+    // Diagnostik bell untuk QA web: `diagnosaBellUji()`.
+    (globalThis as any).diagnosaBellUji = diagnosaBell;
+
+    return () => {
+      pengirimUjiAktif = null;
+      delete (globalThis as any).kirimNotifikasiUji;
+      delete (globalThis as any).diagnosaBellUji;
+    };
+  }, [terimaNotifikasi]);
 
   // Satu koneksi, dipakai bersama semua layar.
   useEffect(() => {
@@ -161,28 +267,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       ambilToken: ambilTokenAktif,
       onStatus: setStatus,
       onGagalLangganan: setGalat,
-      onNotifikasi: (notifikasi) => {
-        urutRef.current += 1;
-        const pesan: PesanRealtime = { notifikasi, urut: urutRef.current };
-
-        setJumlahBelumDibaca((n) => n + 1);
-        setTerakhir(pesan);
-
-        // Bell untuk SETIAP notifikasi baru (bukan hanya order).
-        void putarBell(notifikasi.bunyikanSuara).then((hasil) => {
-          if (hasil === "diputar" || hasil === "tertunda") {
-            setSiapBunyi(true);
-          }
-        });
-
-        listenerRef.current.forEach((listener) => {
-          try {
-            listener(pesan);
-          } catch {
-            /* satu listener rusak tidak boleh memutus koneksi */
-          }
-        });
-      },
+      onNotifikasi: terimaNotifikasi,
     });
 
     klienRef.current = klien;
@@ -201,7 +286,7 @@ export function RealtimeProvider({ children }: { children: React.ReactNode }) {
       klien.berhenti();
       klienRef.current = null;
     };
-  }, []);
+  }, [terimaNotifikasi]);
 
   /**
    * Pengawas token: login & logout terjadi di layar lain (layar auth pelanggan,
