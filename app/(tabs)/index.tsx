@@ -152,6 +152,9 @@ export default function HomeScreen() {
   const jumlahProduk = produkTampil.length;
 
   return (
+    /* Hanya kiri/kanan: gradien HomeHeader sengaja menjangkau ke belakang
+       status bar (guideline §3.5), sedangkan inset atas diterapkan pada konten
+       header (`paddingAtasHeader`) di dalam HomeHeader. */
     <SafeAreaView className="flex-1 bg-neutral-50" edges={["left", "right"]}>
       <HomeHeader
         judul={`${teks.judul.home} · ${namaPelanggan}`}

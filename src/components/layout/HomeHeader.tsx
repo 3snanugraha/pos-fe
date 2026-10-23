@@ -2,7 +2,9 @@ import { LinearGradient } from "expo-linear-gradient";
 import { ChevronDown, Heart, Search, ShoppingBag } from "lucide-react-native";
 import type { ReactNode } from "react";
 import { Pressable, Text, View } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { badgeJumlah } from "../../lib/format";
+import { paddingAtasHeader } from "../../lib/inset";
 import { teks } from "../../lib/i18n";
 import { colors, gradients, sizes } from "../../theme/tokens";
 import { CategoryTabs, type KategoriTab } from "./CategoryTabs";
@@ -60,10 +62,15 @@ export function HomeHeader({
   children,
 }: HomeHeaderProps) {
   const badge = jumlahKeranjang > 0 ? badgeJumlah(jumlahKeranjang) : null;
+  const insets = useSafeAreaInsets();
 
   return (
     <LinearGradient colors={gradienTema[tema]} start={{ x: 0, y: 0 }} end={{ x: 0, y: 1 }}>
-      <View className="px-4 pt-2">
+      {/* Guideline §2.3/§3.5: gradien boleh menjangkau ke belakang status bar,
+          tetapi konten (judul/alamat/ikon, search bar, tabs) mulai di bawah
+          inset atas. paddingTop ditambahkan pada konten, bukan pada gradien,
+          supaya tinggi gradien tetap dan tidak terpotong SafeAreaView. */}
+      <View className="px-4" style={{ paddingTop: paddingAtasHeader(insets) }}>
         {/* Baris 1 — judul, alamat, ikon kanan. */}
         <View className="flex-row items-center justify-between">
           <View className="flex-1 pr-3">
