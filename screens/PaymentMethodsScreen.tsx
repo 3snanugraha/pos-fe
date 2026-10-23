@@ -57,9 +57,15 @@ export default function PaymentMethodsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const ambil = useCallback(async () => {
+  /**
+   * `segar` = jangan pakai cache. Pull-to-refresh dan tombol "Coba Lagi"
+   * WAJIB memakai ini: kalau tidak, daftar kosong yang sempat tersimpan
+   * (mis. admin baru menyimpan metode setelah aplikasi dibuka) akan terus
+   * tampil sampai TTL cache habis.
+   */
+  const ambil = useCallback(async (segar = false) => {
     try {
-      const daftar = await apiService.getPaymentMethods();
+      const daftar = await apiService.getPaymentMethods(!segar);
       return { daftar: Array.isArray(daftar) ? daftar : [], galat: null };
     } catch (err: any) {
       console.error("Error loading payment methods:", err);
@@ -87,7 +93,7 @@ export default function PaymentMethodsScreen() {
 
   const onRefresh = async () => {
     setRefreshing(true);
-    const hasil = await ambil();
+    const hasil = await ambil(true);
     setMetode(hasil.daftar);
     setError(hasil.galat);
     setRefreshing(false);
@@ -95,7 +101,7 @@ export default function PaymentMethodsScreen() {
 
   const muatUlang = async () => {
     setLoading(true);
-    const hasil = await ambil();
+    const hasil = await ambil(true);
     setMetode(hasil.daftar);
     setError(hasil.galat);
     setLoading(false);

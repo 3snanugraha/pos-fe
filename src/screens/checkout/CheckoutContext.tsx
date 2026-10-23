@@ -115,14 +115,21 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
 
   const saldoPoin = Number(profile?.total_poin ?? 0);
 
-  const loadCheckoutData = useCallback(async () => {
+  /**
+   * `segar = true` (dipakai tombol "Coba Lagi" / `muatUlang`) memaksa data
+   * metode pembayaran diambil ulang dari jaringan, bukan dari cache. Tanpa
+   * ini, admin yang baru menyimpan metode di halaman pengaturan tetap melihat
+   * checkout kosong ("Belum ada metode pembayaran aktif") sampai TTL cache
+   * 2 jam habis.
+   */
+  const loadCheckoutData = useCallback(async (segar = false) => {
     setLoading(true);
     setError(null);
 
     try {
       const [addressesData, paymentMethodsData, profileData] = await Promise.all([
         apiService.getCustomerAddresses(),
-        apiService.getPaymentMethods(),
+        apiService.getPaymentMethods(!segar),
         apiService.getCustomerProfile().catch(() => null),
       ]);
 
@@ -471,7 +478,7 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
     instruksi,
     isProcessingOrder,
     handlePlaceOrder,
-    muatUlang: loadCheckoutData,
+    muatUlang: () => loadCheckoutData(true),
   };
 
   return <CheckoutContext.Provider value={value}>{children}</CheckoutContext.Provider>;

@@ -1,6 +1,12 @@
 import { httpClient, ApiError } from './httpClient';
 import { cacheManager, cacheHelpers } from './cacheManager';
 import { API_ENDPOINTS, CACHE_CONFIG } from './config';
+import {
+  dariCache,
+  gabungInfoRekening,
+  layakDisimpan,
+  normalisasiDaftar,
+} from './paymentMethods';
 import * as Types from './types';
 
 /**
@@ -558,53 +564,58 @@ export class ApiService {
   /**
    * Get available payment methods with caching.
    *
-   * Endpoint customer menyembunyikan `nomor_rekening`/`atas_nama`, padahal
-   * pelanggan butuh tujuan transfer. Kita gabungkan dengan
-   * `GET /api/payment-methods` (route staff, tetap menerima token pelanggan
-   * karena hanya memakai `auth:sanctum`) untuk melengkapi data rekening.
+   * `GET /api/customer/payment-methods` sekarang mengirim
+   * `nomor_rekening`/`atas_nama`/`status`, jadi endpoint customer adalah
+   * sumber tunggal. Rute staff (`GET /api/payment-methods`) tetap dipanggil
+   * sebagai pelengkap untuk deployment lama, tapi kegagalan atau ketiadaannya
+   * TIDAK boleh mengurangi daftar.
+   *
+   * Kebijakan cache ada di `services/paymentMethods.ts` (diuji unit di
+   * `services/__tests__/paymentMethods.test.ts`):
+   * - daftar kosong di cache = MISS (dulu `getOrSet` menganggapnya hit,
+   *   sehingga layar kosong bertahan sampai TTL 2 jam meski admin sudah
+   *   menyimpan metode di pos-be);
+   * - hasil kosong tidak disimpan;
+   * - `useCache = false` memaksa jaringan (pull-to-refresh / "Coba Lagi").
    */
   async getPaymentMethods(useCache = true): Promise<Types.PaymentMethod[]> {
-    const fetchCustomer = async (): Promise<Types.PaymentMethod[]> => {
-      const response = await httpClient.get<Types.PaymentMethod[]>(
-        API_ENDPOINTS.customer.paymentMethods,
-        true
-      );
-      return response.data ?? [];
-    };
-
-    const fetchWithAccountInfo = async (): Promise<Types.PaymentMethod[]> => {
-      const [customerMethods, fullMethods] = await Promise.all([
-        fetchCustomer(),
+    const ambilDariServer = async (): Promise<Types.PaymentMethod[]> => {
+      const [customerRes, staffRes] = await Promise.all([
+        httpClient.get<Types.PaymentMethod[]>(
+          API_ENDPOINTS.customer.paymentMethods,
+          true
+        ),
         // Kegagalan di sini tidak boleh mematikan checkout — data rekening
         // hanya pelengkap.
         httpClient
           .get<Types.PaymentMethod[]>(API_ENDPOINTS.kasir.paymentMethods, true)
-          .then((r) => r.data ?? [])
-          .catch(() => [] as Types.PaymentMethod[]),
+          .catch(() => ({ data: [] as Types.PaymentMethod[] })),
       ]);
 
-      const byId = new Map(fullMethods.map((m) => [m.id, m]));
-
-      return customerMethods.map((method) => {
-        const full = byId.get(method.id);
-        return {
-          ...method,
-          nomor_rekening: method.nomor_rekening ?? full?.nomor_rekening ?? null,
-          atas_nama: method.atas_nama ?? full?.atas_nama ?? null,
-          status: method.status ?? full?.status,
-        };
-      });
+      return gabungInfoRekening(
+        normalisasiDaftar(customerRes?.data),
+        normalisasiDaftar(staffRes?.data)
+      );
     };
 
     if (useCache) {
-      return cacheManager.getOrSet(
-        "payment_methods",
-        fetchWithAccountInfo,
-        CACHE_CONFIG.LONG
+      const tersimpan = dariCache(
+        await cacheManager.get<Types.PaymentMethod[]>("payment_methods")
       );
+      if (tersimpan) return tersimpan;
     }
 
-    return fetchWithAccountInfo();
+    const hasil = await ambilDariServer();
+
+    // Daftar kosong TIDAK disimpan: satu kegagalan sesaat tidak boleh
+    // membekukan layar pembayaran selama TTL.
+    if (layakDisimpan(hasil)) {
+      await cacheManager.set("payment_methods", hasil, CACHE_CONFIG.LONG);
+    } else {
+      await cacheManager.delete("payment_methods");
+    }
+
+    return hasil;
   }
 
   // ===== NOTIFICATION METHODS =====
@@ -682,14 +693,19 @@ export class ApiService {
 
   /**
    * Prefetch common data
+   *
+   * Metode pembayaran sengaja TIDAK lewat `cacheManager.prefetch` lagi:
+   * prefetch menyimpan hasil apa pun, termasuk daftar kosong, sehingga satu
+   * kegagalan jaringan saat start membuat layar pembayaran kosong selama TTL.
+   * `getPaymentMethods(false)` sudah mengurus kebijakan simpan (hanya bila ada
+   * isinya).
    */
   async prefetchCommonData(): Promise<void> {
     try {
-      // Prefetch banners, categories, and payment methods in parallel
       await Promise.all([
         cacheManager.prefetch('banners', () => this.getBanners(false), CACHE_CONFIG.LONG),
         cacheManager.prefetch('categories', () => this.getProductCategories(false), CACHE_CONFIG.VERY_LONG),
-        cacheManager.prefetch('payment_methods', () => this.getPaymentMethods(false), CACHE_CONFIG.LONG),
+        this.getPaymentMethods(false),
       ]);
     } catch (error) {
       console.warn('Prefetch failed:', error);
