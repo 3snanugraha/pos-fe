@@ -169,8 +169,11 @@ export default function HomeScreen() {
         onTabChange={setTabAktif}
         tema={tema.kunci === "beauty" || tema.kunci === "fashion" ? "beauty" : "forYou"}
       >
-        {/* Banner carousel di dalam gradien header (guideline §3.7). */}
-        <View className="px-4 pb-4 pt-3">
+        {/* Banner carousel di dalam gradien header (guideline §3.7).
+            Gutter 16 milik BannerCarousel (paddingHorizontal) — jangan
+            dibungkus `px-4` lagi, itu yang membuat lebar kartu dihitung dua
+            kali dan banner meluber keluar layar. */}
+        <View className="pb-4 pt-3">
           <BannerCarousel
             banners={data.banners}
             loading={memuat}

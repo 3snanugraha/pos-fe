@@ -114,7 +114,7 @@ export function SkeletonGridProduk({ jumlah = 4 }: { jumlah?: number }) {
 export function SkeletonBanner() {
   return (
     <View>
-      <Skeleton height={140} radiusClassName="rounded-lg" width="100%" />
+      <Skeleton height={148} radiusClassName="rounded-lg" width="100%" />
       <View className="mt-2 flex-row justify-center gap-2">
         <Skeleton width={16} height={6} radiusClassName="rounded-full" />
         <Skeleton width={6} height={6} radiusClassName="rounded-full" />
