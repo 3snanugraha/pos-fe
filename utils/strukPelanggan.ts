@@ -59,6 +59,12 @@ export type DataStrukPelanggan = {
   rincianSplit?: string | null;
   /** Poin yang dipakai, bila diketahui terpisah dari `total_diskon`. */
   poinDigunakan?: number;
+  /**
+   * Uang tunai pelanggan. Diisi dari `parseTunaiCatatan(order.catatan)` —
+   * order online belum menerima uang, jadi angka ini kesepakatan bayar tunai
+   * di tempat; kembalian dicetak supaya pelanggan & kasir memakai angka sama.
+   */
+  tunai?: { diterima: number; kembalian: number } | null;
 };
 
 /** Nama toko cadangan — HANYA bila fetch store-info gagal. */
@@ -139,6 +145,21 @@ export function bangunHtmlStruk(data: DataStrukPelanggan): string {
     data.poinDigunakan && data.poinDigunakan > 0
       ? `<div class="baris"><span>Poin digunakan</span><span>- ${rupiahStruk(
           data.poinDigunakan
+        )}</span></div>`
+      : "";
+
+  /**
+   * Baris uang tunai & kembalian di nota. Pelanggan yang bayar 300rb untuk
+   * belanja 275rb harus melihat "Kembalian Rp 25.000" di struknya.
+   */
+  const tunaiDiterima = Number(data.tunai?.diterima) || 0;
+  const tunaiKembalian = Math.max(0, Number(data.tunai?.kembalian) || 0);
+  const tunai =
+    tunaiDiterima > 0
+      ? `<div class="baris"><span>Uang tunai diterima</span><span>${rupiahStruk(
+          tunaiDiterima
+        )}</span></div><div class="baris kuat"><span>Kembalian</span><span>${rupiahStruk(
+          tunaiKembalian
         )}</span></div>`
       : "";
 
@@ -271,6 +292,7 @@ export function bangunHtmlStruk(data: DataStrukPelanggan): string {
     <div class="baris total"><span>Total</span><span>${rupiahStruk(
       Number(order.total_bayar) || 0
     )}</span></div>
+    ${tunai}
     ${
       order.status_pembayaran
         ? `<div class="baris muted"><span>Status pembayaran</span><span>${escapeHtml(

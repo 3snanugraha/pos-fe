@@ -49,6 +49,11 @@ import {
   stripSplitFromCatatan,
 } from "../../utils/payment";
 import {
+  parseTunaiCatatan,
+  rupiahTunai,
+  stripTunaiCatatan,
+} from "../../utils/tunai";
+import {
   cetakStrukPelangganPdf,
   type HasilCetakStruk,
 } from "../../utils/cetakStrukPelanggan";
@@ -232,7 +237,7 @@ export default function OrderDetailScreen() {
           status,
           status_pembayaran: order.status_pembayaran ?? null,
           alamat_pengiriman: order.alamat_pengiriman ?? null,
-          catatan: stripSplitFromCatatan(order.catatan) || null,
+          catatan: stripTunaiCatatan(stripSplitFromCatatan(order.catatan)) || null,
           total_harga: Number(order.total_harga) || 0,
           total_diskon: Number(order.total_diskon) || 0,
           total_bayar: Number(order.total_bayar) || 0,
@@ -254,6 +259,7 @@ export default function OrderDetailScreen() {
           })),
         },
         rincianSplit: splitInfo,
+        tunai: tunaiInfo,
       });
 
       if (!hasil.ok) {
@@ -338,7 +344,9 @@ export default function OrderDetailScreen() {
   const IkonStatus = info.ikon;
   const metode = order.metode_pembayaran;
   const splitInfo = parseSplitFromCatatan(order.catatan);
-  const catatanBersih = stripSplitFromCatatan(order.catatan);
+  /** Uang tunai & kembalian yang dicatat saat checkout (`[Tunai: ...]`). */
+  const tunaiInfo = parseTunaiCatatan(order.catatan);
+  const catatanBersih = stripTunaiCatatan(stripSplitFromCatatan(order.catatan));
   const timeline = indeksTimeline(status);
   const bisaBatal = bisaDibatalkan(status);
   const nomor = order.nomor_transaksi || `#${order.id}`;
@@ -584,6 +592,28 @@ export default function OrderDetailScreen() {
               <Text className="mt-1 font-inter text-sm text-neutral-700">
                 {splitInfo}
               </Text>
+            </View>
+          ) : null}
+
+          {/* Uang tunai yang disiapkan pelanggan + kembaliannya. */}
+          {tunaiInfo ? (
+            <View className="mt-2 rounded-md bg-neutral-50 p-3">
+              <View className="flex-row items-center justify-between">
+                <Text className="font-inter text-xs text-neutral-500">
+                  {teks.checkout.tunai.diterima}
+                </Text>
+                <Text className="font-inter text-xs text-neutral-700 tabular-nums">
+                  {rupiahTunai(tunaiInfo.diterima)}
+                </Text>
+              </View>
+              <View className="mt-1 flex-row items-center justify-between">
+                <Text className="font-inter-semibold text-xs text-success-700">
+                  {teks.checkout.tunai.kembalian}
+                </Text>
+                <Text className="font-inter-semibold text-xs text-success-700 tabular-nums">
+                  {rupiahTunai(tunaiInfo.kembalian)}
+                </Text>
+              </View>
             </View>
           ) : null}
 

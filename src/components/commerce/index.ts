@@ -35,3 +35,4 @@ export {
 } from "./Skeleton";
 export { ProductGallery, type GambarProduk, type ProductGalleryProps } from "./ProductGallery";
 export { SearchBar, type SearchBarProps } from "./SearchBar";
+export { UangTunaiPanel, type UangTunaiPanelProps } from "./UangTunaiPanel";

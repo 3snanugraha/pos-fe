@@ -338,6 +338,23 @@ export const teks = {
     totalItem: "{jumlah} item",
     diskonPoin: "Poin ({jumlah} poin)",
     biayaAdmin: "Biaya admin {nilai}",
+
+    /** Uang tunai (quick button + input manual + kembalian). */
+    tunai: {
+      judul: "Uang Tunai",
+      deskripsi:
+        "Pilih nominal cepat atau isi manual uang yang Anda siapkan. Kembalian dihitung otomatis.",
+      uangPas: "Uang Pas",
+      pecahan: "{label} pecahan",
+      labelInput: "Uang Diterima",
+      placeholder: "Contoh: 300000",
+      diterima: "Uang diterima",
+      kembalian: "Kembalian",
+      kurang: "Kurang",
+      kurangPeringatan: "Uang diterima kurang {nilai} dari total pembayaran.",
+      kosong: "Isi nominal bila ingin uang tunai dicatat di nota.",
+      catatanNota: "Uang tunai & kembalian ikut tercetak di nota pesanan.",
+    },
   },
 
   /** Keranjang (W4). */
@@ -511,6 +528,17 @@ export const teks = {
     pilihVarianDulu: "Pilih varian dulu",
     galeriProduk: "Galeri produk",
     diskonPersen: "Diskon {persen} persen",
+    /** Bagikan produk (link versi web ecommerce). */
+    bagikan: "Bagikan",
+    bagikanProduk: "Bagikan produk",
+    bagikanJudul: "Bagikan Produk",
+    bagikanDeskripsi:
+      "Kirim tautan produk versi web ke teman, keluarga, atau grup chat.",
+    tautanDisalin: "Tautan produk disalin",
+    tautanDisalinDeskripsi:
+      "Tempel tautan ini di aplikasi chat atau media sosial pilihan Anda.",
+    bagikanGagal: "Tautan produk tidak bisa dibagikan. Salin manual dari dialog ini.",
+    salinTautan: "Salin Tautan",
   },
 
   /** Barang disimpan (W4) — dialog & umpan balik. */

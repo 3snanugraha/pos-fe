@@ -121,6 +121,28 @@ test("poin yang dipakai tercetak sebagai potongan", () => {
   assert.match(html, /- Rp 5\.000/);
 });
 
+test("uang tunai & kembalian tercetak di nota (300rb untuk belanja 275rb)", () => {
+  const data = dataDasar();
+  data.order.total_harga = 275000;
+  data.order.total_diskon = 0;
+  data.order.total_bayar = 275000;
+  data.tunai = { diterima: 300000, kembalian: 25000 };
+
+  const html = bangunHtmlStruk(data);
+
+  assert.match(html, /Uang tunai diterima/);
+  assert.match(html, /Rp 300\.000/);
+  assert.match(html, /Kembalian/);
+  assert.match(html, /Rp 25\.000/);
+});
+
+test("baris tunai TIDAK muncul bila tidak ada uang tunai", () => {
+  const html = bangunHtmlStruk(dataDasar());
+
+  assert.doesNotMatch(html, /Uang tunai diterima/);
+  assert.doesNotMatch(html, /Kembalian/);
+});
+
 test("isi pelanggan di-escape (tidak ada HTML mentah)", () => {
   const data = dataDasar();
   data.order.catatan = "<script>alert(1)</script>";

@@ -11,6 +11,7 @@ import {
   Skeleton,
   StickyBar,
   StickyTotal,
+  UangTunaiPanel,
 } from "../../src/components/commerce";
 import { AppBar } from "../../src/components/layout";
 import { Accordion, Button, Toggle, type AccordionItem } from "../../src/components/ui";
@@ -19,7 +20,7 @@ import { teks } from "../../src/lib/i18n";
 import { useCheckout } from "../../src/screens/checkout/CheckoutContext";
 import { colors, sizes } from "../../src/theme/tokens";
 import type { PaymentMethod } from "../../services/types";
-import { buildPaymentInstruction, isTransfer, jenisLabel } from "../../utils/payment";
+import { buildPaymentInstruction, isTransfer, isTunai, jenisLabel } from "../../utils/payment";
 
 /**
  * Pembayaran Zovora — guideline §3.14 + §4 (Payment).
@@ -66,6 +67,9 @@ export default function PaymentScreen() {
     finalTotal,
     totalAmount,
     promoDiscount,
+    uangTunai,
+    setUangTunai,
+    tunaiError,
     isProcessingOrder,
     handlePlaceOrder,
     muatUlang,
@@ -190,6 +194,13 @@ export default function PaymentScreen() {
 
   const maksPoin = Math.min(poinValue.maxSaldo, poinValue.maxTagihan);
 
+  /**
+   * Panel uang tunai tampil saat metode TUNAI terpilih pada pembayaran
+   * tunggal. Pada mode campuran, nominal tunai diisi di baris split masing-
+   * masing — panel disembunyikan agar tidak ada dua sumber angka.
+   */
+  const tunaiTerpilih = !useSplit && isTunai(primaryPayment?.jenis_pembayaran);
+
   return (
     <SafeAreaView className="flex-1 bg-neutral-50" edges={["top", "left", "right"]}>
       <AppBar title={teks.judul.payment} onBack={kembali} />
@@ -218,6 +229,22 @@ export default function PaymentScreen() {
               onChange={(key) => setTerbukaManual(key)}
             />
           )}
+
+          {/*
+            Uang tunai — hanya untuk metode TUNAI pada pembayaran tunggal.
+            Mode campuran punya nominal sendiri per baris, jadi panel ini
+            disembunyikan agar tidak ada dua sumber angka untuk kembalian.
+          */}
+          {tunaiTerpilih ? (
+            <View className="mt-4 rounded-lg border border-neutral-200 bg-white p-4">
+              <UangTunaiPanel
+                total={finalTotal}
+                nilai={uangTunai}
+                onChange={setUangTunai}
+                disabled={isProcessingOrder}
+              />
+            </View>
+          ) : null}
 
           {/* ---- Pembayaran campuran (split) ---- */}
           <View className="mt-6 rounded-lg border border-neutral-200 bg-white p-4">
@@ -543,7 +570,9 @@ export default function PaymentScreen() {
           disabled={
             items.length === 0 ||
             paymentMethods.length === 0 ||
-            (useSplit ? splitBelumLengkap || !!paymentError : !primaryPayment)
+            (useSplit
+              ? splitBelumLengkap || !!paymentError
+              : !primaryPayment || (tunaiTerpilih && !!tunaiError))
           }
           onPress={handlePlaceOrder}
         />

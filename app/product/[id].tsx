@@ -1,5 +1,5 @@
 import { useLocalSearchParams, useRouter } from "expo-router";
-import { Heart, MessageSquare, Star } from "lucide-react-native";
+import { Heart, MessageSquare, Share2, Star } from "lucide-react-native";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { kembaliAman } from "../../src/lib/navigasi";
 import {
@@ -28,6 +28,7 @@ import { colors, shadowStyle, sizes } from "../../src/theme/tokens";
 import { useCart } from "../../contexts/CartContext";
 import { addToWishlist, fetchProductById } from "../../services/api";
 import { handleAuthError, getErrorMessage } from "../../utils/auth";
+import { bagikanProduk, urlProdukWeb } from "../../utils/bagikanProduk";
 
 type Varian = {
   id: number;
@@ -85,6 +86,7 @@ export default function ProductDetailScreen() {
   const [varianTerpilih, setVarianTerpilih] = useState<Varian | null>(null);
   const [diWishlist, setDiWishlist] = useState(false);
   const [memproses, setMemproses] = useState(false);
+  const [membagikan, setMembagikan] = useState(false);
 
   const muatProduk = useCallback(async () => {
     if (!idValid) {
@@ -222,6 +224,37 @@ export default function ProductDetailScreen() {
     }
   };
 
+  /**
+   * Bagikan produk — tautan selalu menunjuk versi WEB ecommerce
+   * (`<origin-web>/product/<id>`) supaya penerima di chat bisa membukanya.
+   * Native memakai share sheet sistem; web memakai Web Share API dengan
+   * fallback salin tautan (lihat `utils/bagikanProduk.ts`).
+   */
+  const onBagikan = async () => {
+    if (!produk) return;
+    setMembagikan(true);
+    try {
+      const hasil = await bagikanProduk({
+        idProduk: produk.id,
+        namaProduk: produk.nama_produk,
+      });
+
+      if (hasil.mode === "copy") {
+        Alert.alert(teks.produk.tautanDisalin, teks.produk.tautanDisalinDeskripsi, [
+          { text: "OK" },
+        ]);
+      } else if (hasil.mode === "gagal") {
+        Alert.alert(teks.umum.gagal, `${teks.produk.bagikanGagal}\n\n${hasil.url}`, [
+          { text: "OK" },
+        ]);
+      }
+      // `share` dan `batal` tidak perlu dialog tambahan: dialog sistem sudah
+      // menjadi umpan baliknya (dan `batal` = pengguna menutup sheet).
+    } finally {
+      setMembagikan(false);
+    }
+  };
+
   /* ---------------------------- state layar ---------------------------- */
 
   if (memuat) {
@@ -281,24 +314,47 @@ export default function ProductDetailScreen() {
           jumlahUlasan={jumlahUlasanProduk}
           onBack={kembali}
           aksiKanan={
-            <Pressable
-              onPress={onTambahWishlist}
-              accessibilityRole="button"
-              accessibilityLabel={
-                diWishlist ? teks.a11y.hapusDariWishlist : teks.a11y.tambahKeWishlist
-              }
-              accessibilityState={{ selected: diWishlist }}
-              hitSlop={sizes.hitSlop}
-              className="items-center justify-center rounded-full bg-white shadow-float active:opacity-90"
-              style={{ width: sizes.iconButton, height: sizes.iconButton }}
-            >
-              <Heart
-                size={18}
-                color={diWishlist ? colors.danger500 : colors.neutral700}
-                fill={diWishlist ? colors.danger500 : "transparent"}
-                strokeWidth={1.75}
-              />
-            </Pressable>
+            <>
+              {/*
+                Bagikan — ikon Share2 di kiri tombol wishlist. Tautan yang
+                dibagikan adalah versi WEB ecommerce (`/product/<id>`), bukan
+                skema `deadeastore://`, supaya bisa dibuka penerima.
+              */}
+              <Pressable
+                onPress={onBagikan}
+                disabled={membagikan}
+                accessibilityRole="button"
+                accessibilityLabel={teks.produk.bagikanProduk}
+                accessibilityState={{ busy: membagikan, disabled: membagikan }}
+                hitSlop={sizes.hitSlop}
+                testID="tombol-bagikan-produk"
+                className={`items-center justify-center rounded-full bg-white shadow-float active:opacity-90 ${
+                  membagikan ? "opacity-50" : ""
+                }`}
+                style={{ width: sizes.iconButton, height: sizes.iconButton }}
+              >
+                <Share2 size={18} color={colors.neutral700} strokeWidth={1.75} />
+              </Pressable>
+
+              <Pressable
+                onPress={onTambahWishlist}
+                accessibilityRole="button"
+                accessibilityLabel={
+                  diWishlist ? teks.a11y.hapusDariWishlist : teks.a11y.tambahKeWishlist
+                }
+                accessibilityState={{ selected: diWishlist }}
+                hitSlop={sizes.hitSlop}
+                className="items-center justify-center rounded-full bg-white shadow-float active:opacity-90"
+                style={{ width: sizes.iconButton, height: sizes.iconButton }}
+              >
+                <Heart
+                  size={18}
+                  color={diWishlist ? colors.danger500 : colors.neutral700}
+                  fill={diWishlist ? colors.danger500 : "transparent"}
+                  strokeWidth={1.75}
+                />
+              </Pressable>
+            </>
           }
         />
 
@@ -338,6 +394,42 @@ export default function ProductDetailScreen() {
                 </Text>
               </>
             ) : null}
+          </View>
+
+          {/*
+            Baris bagikan eksplisit (label + tautan versi web yang terlihat).
+            Ikon di galeri berguna di ponsel; di web tombol berlabel ini yang
+            memakai Web Share API dan, bila browser tidak mendukungnya, menyalin
+            tautan lalu memberi tahu "Tautan produk disalin".
+          */}
+          <View className="mt-3 flex-row items-center gap-2 rounded-md border border-neutral-200 bg-neutral-50 px-3 py-2">
+            <Pressable
+              onPress={onBagikan}
+              disabled={membagikan}
+              accessibilityRole="button"
+              accessibilityLabel={teks.produk.bagikanProduk}
+              accessibilityState={{ busy: membagikan, disabled: membagikan }}
+              testID="tombol-bagikan-baris"
+              className={`flex-row items-center gap-1.5 rounded-sm bg-white px-3 ${
+                membagikan ? "opacity-50" : "active:bg-primary-50"
+              }`}
+              style={{ minHeight: sizes.minTouchTarget }}
+            >
+              <Share2 size={16} color={colors.primary700} strokeWidth={1.75} />
+              <Text
+                className="font-inter-medium text-xs text-primary-700"
+                maxFontSizeMultiplier={1.3}
+              >
+                {teks.produk.bagikan}
+              </Text>
+            </Pressable>
+            <Text
+              className="flex-1 font-inter text-caption text-neutral-500"
+              numberOfLines={1}
+              testID="tautan-produk-web"
+            >
+              {urlProdukWeb(produk.id)}
+            </Text>
           </View>
         </View>
 

@@ -12,6 +12,7 @@ import { colors, sizes } from "../../src/theme/tokens";
 import { apiService } from "../../services/apiService";
 import type { OrderDetail } from "../../services/types";
 import { formatDateTime, useOrderExpiry } from "../../utils/orderExpiry";
+import { parseTunaiCatatan, rupiahTunai } from "../../utils/tunai";
 import { kembaliAman } from "../../src/lib/navigasi";
 
 /**
@@ -31,6 +32,8 @@ export default function CheckoutSuccessScreen() {
     orderId?: string;
     totalAmount?: string;
     poin?: string;
+    tunaiDiterima?: string;
+    tunaiKembalian?: string;
   }>();
 
   const [order, setOrder] = useState<OrderDetail | null>(null);
@@ -48,6 +51,20 @@ export default function CheckoutSuccessScreen() {
   const poinDipakai = Number((order as any)?.poin_digunakan) || poinParam;
 
   const expiry = useOrderExpiry(order?.order_expires_at, order?.status ?? "pending");
+
+  /**
+   * Uang tunai diambil dari `catatan` order (server) lebih dulu, lalu dari
+   * param URL sebagai cadangan. Param dipakai saat respons order belum tiba —
+   * angka keduanya berasal dari `utils/tunai.ts` yang sama.
+   */
+  const tunai = (() => {
+    const dariCatatan = parseTunaiCatatan(order?.catatan ?? null);
+    if (dariCatatan) return dariCatatan;
+
+    const diterima = Number(params.tunaiDiterima ?? 0) || 0;
+    if (diterima <= 0) return null;
+    return { diterima, kembalian: Number(params.tunaiKembalian ?? 0) || 0 };
+  })();
 
   useEffect(() => {
     if (Number.isNaN(orderId)) return;
@@ -150,6 +167,39 @@ export default function CheckoutSuccessScreen() {
                   {angka(poinDipakai)} poin
                 </Text>
               </View>
+            ) : null}
+
+            {/*
+              Uang tunai & kembalian — bukti utama pelanggan yang memilih COD:
+              "bayar 300rb untuk belanja 275rb → kembalian 25rb" harus terbaca
+              di nota, bukan hanya di layar pembayaran.
+            */}
+            {tunai ? (
+              <>
+                <View className="mt-3 flex-row items-center justify-between gap-3 border-t border-neutral-100 pt-3">
+                  <Text className="font-inter text-sm text-neutral-500">
+                    {teks.checkout.tunai.diterima}
+                  </Text>
+                  <Text
+                    className="font-inter-semibold text-sm text-neutral-900 tabular-nums"
+                    maxFontSizeMultiplier={1.3}
+                  >
+                    {rupiahTunai(tunai.diterima)}
+                  </Text>
+                </View>
+                <View className="mt-1 flex-row items-center justify-between gap-3">
+                  <Text className="font-inter-semibold text-sm text-success-700">
+                    {teks.checkout.tunai.kembalian}
+                  </Text>
+                  <Text
+                    className="font-inter-bold text-base text-success-700 tabular-nums"
+                    maxFontSizeMultiplier={1.3}
+                    testID="kembalian-nota"
+                  >
+                    {rupiahTunai(tunai.kembalian)}
+                  </Text>
+                </View>
+              </>
             ) : null}
           </View>
 

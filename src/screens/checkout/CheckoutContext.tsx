@@ -23,9 +23,16 @@ import { formatAlamatLengkap } from "../../../utils/formatters";
 import {
   buildCatatanWithSplit,
   buildPaymentInstruction,
+  isTunai,
   RUPIAH_PER_POIN,
   validasiSplitPembayaran,
 } from "../../../utils/payment";
+import {
+  gabungCatatanTunai,
+  hitungTunai,
+  nominalTunai,
+  validasiTunai,
+} from "../../../utils/tunai";
 
 export type SplitRow = {
   metode: PaymentMethod;
@@ -76,6 +83,16 @@ type CheckoutContextValue = {
   canProceedPayment: boolean;
   notes: string;
   setNotes: (nilai: string) => void;
+  /** Uang tunai yang disiapkan pelanggan (teks mentah input). */
+  uangTunai: string;
+  setUangTunai: (nilai: string) => void;
+  /** Angka uang tunai (0 bila kosong). */
+  uangTunaiNominal: number;
+  /** Kembalian / kekurangan untuk uang tunai yang diisi. */
+  tunaiKembalian: number;
+  tunaiKurang: number;
+  /** Pesan peringatan bila uang tunai < tagihan (null = aman). */
+  tunaiError: string | null;
   /** Total tagihan setelah promo + poin. */
   finalTotal: number;
   totalAmount: number;
@@ -103,6 +120,7 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
   const [promoDiscount, setPromoDiscount] = useState(0);
   const [poinDigunakan, setPoinDigunakan] = useState(0);
   const [notes, setNotes] = useState("");
+  const [uangTunai, setUangTunai] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isProcessingOrder, setIsProcessingOrder] = useState(false);
@@ -234,9 +252,20 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
 
   const splitBelumLengkap = useSplit && activeSplits.length < 2;
 
+  /**
+   * Uang tunai hanya relevan pada pembayaran TUNGGAL bertipe `tunai`.
+   * Mode campuran sudah punya nominal per metode sendiri (`splits`), jadi
+   * panel tunai disembunyikan agar tidak ada dua sumber angka.
+   */
+  const tunaiAktif = !useSplit && isTunai(primaryPayment?.jenis_pembayaran);
+
+  const uangTunaiNominal = nominalTunai(uangTunai);
+  const hasilTunai = hitungTunai(finalTotal, uangTunaiNominal);
+  const tunaiError = tunaiAktif ? validasiTunai(finalTotal, uangTunaiNominal) : null;
+
   const canProceedPayment = useSplit
     ? !paymentError && !splitBelumLengkap
-    : !!primaryPayment;
+    : !!primaryPayment && !tunaiError;
 
   // ---- Split payment -----------------------------------------------------
 
@@ -341,6 +370,12 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
       return;
     }
 
+    // Uang tunai kurang dari tagihan: hentikan sebelum request dibuat.
+    if (!useSplit && tunaiAktif && tunaiError) {
+      Alert.alert("Uang tunai kurang", tunaiError);
+      return;
+    }
+
     const metodeId = useSplit ? activeSplits[0]?.metode.id : primaryPayment?.id;
 
     if (!metodeId) {
@@ -355,7 +390,7 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
     const fullAddress = formatAlamatLengkap(selectedAddress);
 
     try {
-      const catatanAkhir = useSplit
+      const catatanSplit = useSplit
         ? buildCatatanWithSplit(
             notes,
             activeSplits.map((row) => ({
@@ -364,6 +399,20 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
             }))
           )
         : notes.trim() || undefined;
+
+      /**
+       * Uang tunai & kembalian ikut ditulis ke catatan order: backend
+       * (`CustomerOrderController@store`) hanya menerima `metode_pembayaran_id`
+       * + `catatan`, dan `jumlah_dibayar`/`kembalian` diisi 0 sampai kasir
+       * memverifikasi. Penanda `[Tunai: diterima …; kembali …]` membuat kasir
+       * dan struk pelanggan membaca angka yang sama tanpa mengubah kontrak API.
+       */
+      const catatanAkhir = gabungCatatanTunai(
+        catatanSplit,
+        tunaiAktif && uangTunaiNominal > 0
+          ? { diterima: uangTunaiNominal, kembalian: hasilTunai.kembalian }
+          : null
+      );
 
       const payload = {
         items: items.map((item) => ({
@@ -423,6 +472,12 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
           orderId: String(result.id ?? ""),
           totalAmount: String(totalAkhir),
           poin: String(poinTerpakai),
+          // Uang tunai & kembalian diteruskan sebagai cadangan: layar sukses
+          // lebih dulu memakai `catatan` dari respons server bila sudah termuat.
+          tunaiDiterima:
+            tunaiAktif && uangTunaiNominal > 0 ? String(uangTunaiNominal) : "",
+          tunaiKembalian:
+            tunaiAktif && uangTunaiNominal > 0 ? String(hasilTunai.kembalian) : "",
         },
       });
     } catch (err: any) {
@@ -472,6 +527,12 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
     canProceedPayment,
     notes,
     setNotes,
+    uangTunai,
+    setUangTunai,
+    uangTunaiNominal,
+    tunaiKembalian: hasilTunai.kembalian,
+    tunaiKurang: hasilTunai.kurang,
+    tunaiError,
     finalTotal,
     totalAmount,
     metodeTerpilih,
