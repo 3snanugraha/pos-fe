@@ -73,6 +73,14 @@ export class EscPosEncoder {
     return this;
   }
 
+  /** Umpan kertas `n` baris (dipakai sebelum potong agar struk tidak sobek di teks). */
+  feed(lines: number = 1) {
+    for (let i = 0; i < lines; i++) {
+      this.buffer.push(0x0a);
+    }
+    return this;
+  }
+
   line(char: string = "-") {
     this.text(char.repeat(32));
     this.newline();

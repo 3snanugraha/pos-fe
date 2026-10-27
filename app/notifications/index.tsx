@@ -15,6 +15,7 @@ import { useNotifikasiMasuk, useRealtime, type PesanRealtime } from "../../src/l
 import { TombolSuara } from "../../src/components/notifikasi/TombolSuara";
 import { getErrorMessage, handleAuthError } from "../../utils/auth";
 import { kembaliAman } from "../../src/lib/navigasi";
+import { getStaffUser } from "../../services/staffSession";
 
 /**
  * Notifikasi Zovora — guideline §3.15 + §5.
@@ -146,9 +147,20 @@ const NotificationsScreen = () => {
     switch (notification.tipe) {
       case "order":
       case "payment":
-      case "shipping":
-        router.push("/orders");
+      case "shipping": {
+        /**
+         * Notifikasi bertipe order milik dua audiens berbeda:
+         *  - perangkat KASIR (sesi staf tersimpan) → layar konfirmasi
+         *    "Order Masuk" (`/kasir/orders`), tempat verifikasi + cetak struk;
+         *  - PELANGGAN → riwayat pesanan mereka (`/orders`).
+         * Sebelumnya keduanya dibuka ke `/orders`: kasir yang mengetuk
+         * notifikasi "Order Baru" mendarat di riwayat pesanan pelanggan dan
+         * tidak bisa memverifikasi apa pun.
+         */
+        const staf = await getStaffUser();
+        router.push(staf ? "/kasir/orders" : "/orders");
         break;
+      }
       case "promo":
         router.push("/(tabs)/products");
         break;

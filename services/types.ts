@@ -453,6 +453,8 @@ export interface Transaction {
     telepon?: string;
   } | null;
   items_count?: number;
+  /** Jumlah baris item dari `withCount('detailTransaksi')` (API staf). */
+  jumlah_item?: number;
   catatan?: string;
   created_at: string;
   updated_at: string;

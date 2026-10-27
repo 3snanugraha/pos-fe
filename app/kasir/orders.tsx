@@ -1,15 +1,18 @@
 import {
   CheckCheck,
   Clock,
+  Filter as FilterIcon,
   LogOut,
   PackageCheck,
+  Printer,
   RefreshCw,
+  Search,
   ShieldCheck,
   XCircle,
 } from "lucide-react-native";
 import { kembaliAman } from "../../src/lib/navigasi";
 import { useRouter } from "expo-router";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Linking,
   Pressable,
@@ -21,9 +24,21 @@ import {
 } from "react-native";
 import { SafeAreaView, useSafeAreaInsets } from "react-native-safe-area-context";
 import { ErrorState, Skeleton, StickyBar } from "../../src/components/commerce";
+import { TombolSalin } from "../../src/components/kasir/TombolSalin";
 import { AppBar } from "../../src/components/layout";
-import { Button, EmptyState, Input } from "../../src/components/ui";
+import { Button, Chip, Dialog, EmptyState, Input } from "../../src/components/ui";
 import { rupiah, tanggalWaktu } from "../../src/lib/format";
+import {
+  FILTER_AWAL,
+  LABEL_STATUS,
+  PRESET_RENTANG,
+  bangunQueryOrder,
+  galatTanggalKustom,
+  jumlahFilterAktif,
+  ringkasFilter,
+  tanggalTampil,
+  type FilterOrder,
+} from "../../src/lib/filterOrder";
 import { paddingBawahKonten } from "../../src/lib/inset";
 import { teks } from "../../src/lib/i18n";
 import { colors, sizes } from "../../src/theme/tokens";
@@ -31,8 +46,9 @@ import {
   StaffApiError,
   StaffSessionUnavailableError,
   clearStaffSession,
-  fetchPendingOnlineOrders,
+  fetchOnlineOrdersBerhalaman,
   fetchStaffOrderDetail,
+  fetchStaffPaymentMethods,
   getStaffUser,
   isCrossOriginWeb,
   loginStaff,
@@ -50,15 +66,22 @@ import {
   type PesanRealtime,
 } from "../../src/lib/realtime/RealtimeProvider";
 import { TombolSuara } from "../../src/components/notifikasi/TombolSuara";
+import { cetakStrukOrderKasir } from "../../utils/cetakStrukThermal";
 
 interface KasirOrder {
   transaction: Transaction;
   items: {
-    id: number;
+    id?: number;
     nama_produk: string;
     nama_varian?: string | null;
+    nama_satuan?: string | null;
     jumlah: number;
-    harga: number | string;
+    /**
+     * API `detail_transaksi` mengirim `harga_satuan` (bukan `harga`);
+     * keduanya dibaca supaya struk tidak mencetak "Rp 0".
+     */
+    harga?: number | string;
+    harga_satuan?: number | string;
     subtotal: number | string;
   }[];
   alamat?: string | null;
@@ -66,14 +89,34 @@ interface KasirOrder {
   total: number;
 }
 
+/** Hasil aksi yang mengubah data — plus tawaran cetak ulang bila gagal cetak. */
+type Aksi = {
+  tipe: "sukses" | "error";
+  teks: string;
+  /** Order yang sudah diverifikasi tetapi struknya gagal dicetak. */
+  orderPerluCetak?: KasirOrder | null;
+} | null;
+
 /**
  * Order Masuk (Kasir) Zovora — guideline §3.2 (form login) + §3.9 (kartu) + §5.
  *
- * Dua keadaan: gate login staf (form email + password di kartu putih) dan
- * daftar order pending dengan aksi Verifikasi / Tolak inline. Semua logika
- * sesi staf (`loginStaff`, `loginStaffSession`, `verifyOnlineOrder`,
- * `rejectOnlineOrder`) tidak berubah — hanya tampilan dan copy yang
- * dilokalisasi. Konfirmasi tidak memakai `Alert` (callback tidak jalan di web).
+ * Tiga hal yang ditambahkan supaya layar ini informatif (sebelumnya hanya
+ * daftar order pending tanpa alat bantu):
+ *
+ * 1. **Salin nomor transaksi** — tombol di setiap kartu; kasir sering perlu
+ *    menempelkan nomor ke chat pelanggan atau catatan transfer.
+ * 2. **Cetak struk thermal saat verifikasi** — setelah verifikasi berhasil,
+ *    struk 58 mm dicetak (ESC/POS RawBT + fallback dialog cetak; lihat
+ *    `utils/cetakStrukThermal.ts`). Bila printer belum siap, verifikasi tetap
+ *    berhasil dan tombol "Cetak struk" tetap tersedia di kartu hasil.
+ * 3. **Filter komprehensif** — status, rentang tanggal (preset + kustom),
+ *    metode bayar, dan pencarian nomor/nama/telepon. Semuanya diterjemahkan
+ *    ke parameter API (`src/lib/filterOrder.ts`) sehingga penyaringan terjadi
+ *    di server; daftar tidak lagi terpotong pada 50 transaksi terbaru.
+ *
+ * Semua logika sesi staf (`loginStaff`, `loginStaffSession`,
+ * `verifyOnlineOrder`, `rejectOnlineOrder`) tidak berubah. Konfirmasi tidak
+ * memakai `Alert` (callback tidak jalan di web).
  */
 export default function KasirOrdersScreen() {
   const router = useRouter();
@@ -93,59 +136,125 @@ export default function KasirOrdersScreen() {
   const [busyId, setBusyId] = useState<number | null>(null);
   const [rejectingId, setRejectingId] = useState<number | null>(null);
   const [rejectReason, setRejectReason] = useState("");
-  const [actionMessage, setActionMessage] = useState<{
-    tipe: "sukses" | "error";
-    teks: string;
-  } | null>(null);
+  const [aksi, setAksi] = useState<Aksi>(null);
+  const [mencetakId, setMencetakId] = useState<number | null>(null);
+  /** Total baris dari `meta.total` (bukan panjang satu halaman). */
+  const [totalOrder, setTotalOrder] = useState(0);
+  /** Halaman yang sedang ditampilkan dan halaman terakhir menurut server. */
+  const [halaman, setHalaman] = useState(1);
+  const [halamanTerakhir, setHalamanTerakhir] = useState(1);
+  const [memuatLagi, setMemuatLagi] = useState(false);
 
-  const loadOrders = useCallback(async () => {
-    setError(null);
+  // ---- Filter ------------------------------------------------------------
+  /** Nilai di dialog (bisa diubah sebelum diterapkan). */
+  const [filter, setFilter] = useState<FilterOrder>(FILTER_AWAL);
+  /** Filter yang dipakai untuk permintaan terakhir. */
+  const [filterAktif, setFilterAktif] = useState<FilterOrder>(FILTER_AWAL);
+  const [filterTerbuka, setFilterTerbuka] = useState(false);
+  const [metodeList, setMetodeList] = useState<
+    { id: number; nama_metode: string }[]
+  >([]);
 
-    try {
-      const pending = await fetchPendingOnlineOrders();
+  const jumlahFilter = jumlahFilterAktif(filterAktif);
+  const galatTanggal = galatTanggalKustom(filter);
+  const ringkasanFilter = useMemo(() => ringkasFilter(filterAktif), [filterAktif]);
 
-      // Ambil detail (item + alamat) untuk setiap order pending.
-      const details = await Promise.all(
-        pending.map(async (trx) => {
-          try {
-            const detail = await fetchStaffOrderDetail(trx.id);
-            return {
-              transaction: trx,
-              items: detail?.detail_transaksi ?? detail?.items ?? [],
-              alamat: detail?.alamat_pengiriman ?? trx.alamat_pengiriman ?? null,
-              catatan: detail?.catatan ?? trx.catatan ?? null,
-              total: Number(detail?.total_bayar ?? trx.total_bayar) || 0,
-            } as KasirOrder;
-          } catch {
-            return {
-              transaction: trx,
-              items: [],
-              alamat: null,
-              catatan: trx.catatan ?? null,
-              total: Number(trx.total_bayar) || 0,
-            } as KasirOrder;
-          }
-        })
-      );
+  /**
+   * Ubah baris API menjadi kartu siap tampil.
+   *
+   * Baris item sudah ikut dalam respons (`dengan_item=1`), jadi tidak ada lagi
+   * N+1 `GET /transactions/{id}` per kartu. Detail per order hanya dipanggil
+   * sebagai cadangan bila backend belum mengirim `detail_transaksi`, dan
+   * kegagalannya tidak mengosongkan kartu.
+   */
+  const jadikanKartu = useCallback(async (rows: any[]): Promise<KasirOrder[]> => {
+    return Promise.all(
+      rows.map(async (trx) => {
+        const itemsDariDaftar = trx.detail_transaksi;
 
-      setOrders(details);
-    } catch (err: any) {
-      if (err instanceof StaffSessionUnavailableError) {
-        await clearStaffSession();
-        setStaff(null);
-        setError(err.message);
-      } else if (err instanceof StaffApiError && err.status === 401) {
-        await clearStaffSession();
-        setStaff(null);
-        setError(teks.kasir.sesiBerakhir);
-      } else {
-        setError(err?.message ?? teks.kasir.muatGagal);
-      }
-    } finally {
-      setLoading(false);
-      setRefreshing(false);
-    }
+        if (Array.isArray(itemsDariDaftar)) {
+          return {
+            transaction: trx,
+            items: itemsDariDaftar,
+            alamat: trx.alamat_pengiriman ?? null,
+            catatan: trx.catatan ?? null,
+            total: Number(trx.total_bayar) || 0,
+          } as KasirOrder;
+        }
+
+        try {
+          const detail = await fetchStaffOrderDetail(trx.id);
+          return {
+            transaction: trx,
+            items: detail?.detail_transaksi ?? detail?.items ?? [],
+            alamat: detail?.alamat_pengiriman ?? trx.alamat_pengiriman ?? null,
+            catatan: detail?.catatan ?? trx.catatan ?? null,
+            total: Number(detail?.total_bayar ?? trx.total_bayar) || 0,
+          } as KasirOrder;
+        } catch {
+          return {
+            transaction: trx,
+            items: [],
+            alamat: trx.alamat_pengiriman ?? null,
+            catatan: trx.catatan ?? null,
+            total: Number(trx.total_bayar) || 0,
+          } as KasirOrder;
+        }
+      })
+    );
   }, []);
+
+  /**
+   * Muat daftar order dari server.
+   *
+   * `halamanTujuan` default 1 (muat ulang penuh). Nilai > 1 dipakai tombol
+   * "Muat lagi": baris halaman berikut DITAMBAHKAN, bukan menggantikan.
+   */
+  const loadOrders = useCallback(
+    async (pakaiFilter: FilterOrder, halamanTujuan: number = 1) => {
+      setError(null);
+      const tambah = halamanTujuan > 1;
+
+      if (tambah) setMemuatLagi(true);
+      else setLoading(true);
+
+      try {
+        const hasil = await fetchOnlineOrdersBerhalaman(
+          bangunQueryOrder(pakaiFilter, new Date(), halamanTujuan)
+        );
+
+        const lengkap = await jadikanKartu(hasil.rows as any[]);
+
+        setOrders((sebelum) => (tambah ? [...sebelum, ...lengkap] : lengkap));
+        setTotalOrder(hasil.total);
+        setHalaman(hasil.halaman);
+        setHalamanTerakhir(hasil.halamanTerakhir);
+      } catch (err: any) {
+        if (err instanceof StaffSessionUnavailableError) {
+          await clearStaffSession();
+          setStaff(null);
+          setError(err.message);
+        } else if (err instanceof StaffApiError && err.status === 401) {
+          await clearStaffSession();
+          setStaff(null);
+          setError(teks.kasir.sesiBerakhir);
+        } else {
+          setError(err?.message ?? teks.kasir.muatGagal);
+        }
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+        setMemuatLagi(false);
+      }
+    },
+    [jadikanKartu]
+  );
+
+  /** Muat halaman berikutnya (order ke-51 dan seterusnya). */
+  const muatLagi = () => {
+    if (memuatLagi || halaman >= halamanTerakhir) return;
+    void loadOrders(filterAktif, halaman + 1);
+  };
 
   /**
    * Koneksi realtime dibuat di root saat aplikasi dibuka — ketika token staf
@@ -161,12 +270,37 @@ export default function KasirOrdersScreen() {
       setStaff(user);
       setCheckingSession(false);
       if (user) {
-        loadOrders();
+        void loadOrders(FILTER_AWAL);
         // Sesi staf dipulihkan dari storage → token sudah ada, sambungkan.
         sambungUlang();
       }
     })();
-  }, [loadOrders, sambungUlang]);
+    // Sekali saat mount: filter berikutnya diterapkan lewat aksi pengguna.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sambungUlang]);
+
+  /** Metode bayar untuk filter. Gagal memuat tidak menghalangi daftar order. */
+  useEffect(() => {
+    if (!staff) return;
+
+    let aktif = true;
+    (async () => {
+      try {
+        // Token STAF, bukan token pelanggan: `apiService.getPaymentMethods()`
+        // membaca `auth_token` sehingga di perangkat kasir hasilnya 401 dan
+        // chip metode bayar kosong. Kegagalan tetap tidak fatal — dialog
+        // hanya menampilkan "Semua metode".
+        const metode = await fetchStaffPaymentMethods();
+        if (aktif) setMetodeList(metode);
+      } catch {
+        if (aktif) setMetodeList([]);
+      }
+    })();
+
+    return () => {
+      aktif = false;
+    };
+  }, [staff]);
 
   /**
    * Realtime: order baru dari aplikasi mobile / pelanggan.
@@ -182,10 +316,10 @@ export default function KasirOrdersScreen() {
         return;
       }
 
-      setActionMessage({ tipe: "sukses", teks: teks.kasir.orderBaruMasuk });
-      void loadOrders();
+      setAksi({ tipe: "sukses", teks: teks.kasir.orderBaruMasuk });
+      void loadOrders(filterAktif);
     },
-    [loadOrders]
+    [filterAktif, loadOrders]
   );
 
   useNotifikasiMasuk(tanganiOrderBaru);
@@ -209,22 +343,18 @@ export default function KasirOrdersScreen() {
         await loginStaffSession(email.trim(), password);
       } catch (sessionError: any) {
         // Tidak fatal: daftar order tetap bisa dibaca via API token.
-        setActionMessage({
+        setAksi({
           tipe: "error",
-          teks:
-            sessionError?.message ??
-            teks.kasir.loginDeskripsi,
+          teks: sessionError?.message ?? teks.kasir.loginDeskripsi,
         });
       }
 
-      await loadOrders();
+      await loadOrders(filterAktif);
       // Token staf baru tersedia sekarang → langgani channel privat tim
       // (`private-orders`). Tanpa ini koneksi buatan root tetap tidak-aktif.
       sambungUlang();
     } catch (err: any) {
-      setError(
-        err instanceof StaffApiError ? err.message : teks.kasir.loginGagal
-      );
+      setError(err instanceof StaffApiError ? err.message : teks.kasir.loginGagal);
     } finally {
       setLoggingIn(false);
     }
@@ -240,34 +370,153 @@ export default function KasirOrdersScreen() {
     sambungUlang();
   };
 
+  /** Terapkan filter dari dialog: tutup, lalu muat ulang dari server. */
+  const terapkanFilter = () => {
+    if (galatTanggal) return;
+
+    setFilterTerbuka(false);
+    setFilterAktif(filter);
+    setLoading(true);
+    void loadOrders(filter);
+  };
+
+  const resetFilter = () => {
+    setFilter(FILTER_AWAL);
+    setFilterAktif(FILTER_AWAL);
+    setFilterTerbuka(false);
+    setLoading(true);
+    void loadOrders(FILTER_AWAL);
+  };
+
+  /** Ketik di kotak cari lalu Enter → terapkan tanpa membuka dialog. */
+  const cariSekarang = () => {
+    setFilterAktif(filter);
+    setLoading(true);
+    void loadOrders(filter);
+  };
+
+  const hapusPencarian = () => {
+    const bersih = { ...filter, cari: "" };
+    setFilter(bersih);
+    setFilterAktif(bersih);
+    setLoading(true);
+    void loadOrders(bersih);
+  };
+
   /**
-   * Verifikasi langsung tanpa dialog konfirmasi.
+   * Cetak struk thermal untuk satu order.
    *
-   * Konfirmasi dibuat inline (tombol "Verifikasi" + status baris), bukan
-   * `Alert.alert` dengan callback: di web callback Alert tidak selalu jalan,
-   * sehingga tombol terasa mati. Inline juga lebih cepat untuk kasir.
+   * `verifikasi` diisi saat dipanggil setelah verifikasi berhasil (struk
+   * memuat "Diverifikasi oleh …"); null saat cetak ulang dari kartu.
+   */
+  const cetakStruk = useCallback(
+    async (
+      order: KasirOrder,
+      verifikasi?: { oleh?: string | null; pada?: string | null } | null
+    ): Promise<boolean> => {
+      setMencetakId(order.transaction.id);
+
+      try {
+        const hasil = await cetakStrukOrderKasir(
+          {
+            nomor_transaksi: order.transaction.nomor_transaksi,
+            tanggal_transaksi: order.transaction.tanggal_transaksi,
+            pelanggan: order.transaction.pelanggan ?? null,
+            metode_pembayaran: order.transaction.metode_pembayaran ?? null,
+            /**
+             * Verifikasi kasir menandai pesanan LUNAS di server
+             * (`OnlineOrderController@verify` mengisi `status_pembayaran`
+             * = lunas). Objek order di memori masih memuat status lama
+             * (`belum_bayar`), jadi struk verifikasi WAJIB memakai status
+             * hasil verifikasi — kalau tidak, struk yang baru dicetak
+             * menyatakan "BELUM BAYAR" untuk pesanan yang sudah dibayar.
+             */
+            status_pembayaran: verifikasi
+              ? "lunas"
+              : (order.transaction.status_pembayaran ?? null),
+            alamat_pengiriman: order.alamat ?? null,
+            catatan: order.catatan ?? null,
+            subtotal: Number(order.transaction.subtotal ?? 0) || order.total,
+            total_diskon: Number(order.transaction.total_diskon ?? 0) || 0,
+            total_bayar: order.total,
+            items: order.items.map((i) => ({
+              nama_produk: i.nama_produk,
+              nama_varian: i.nama_varian ?? null,
+              satuan: i.nama_satuan ?? null,
+              jumlah: Number(i.jumlah) || 0,
+              // Baris `detail_transaksi` memakai `harga_satuan`; `harga`
+              // dipertahankan untuk pemanggil yang memakai bentuk ringkas.
+              harga: Number(i.harga_satuan ?? i.harga) || 0,
+              subtotal: Number(i.subtotal) || 0,
+            })),
+          },
+          verifikasi ?? null
+        );
+
+        if (!hasil.ok) {
+          setAksi({
+            tipe: "error",
+            teks: `${teks.kasir.cetakGagal}: ${
+              hasil.alasan === "tanpa-app" ? teks.kasir.cetakTanpaApp : hasil.pesan
+            }`,
+            orderPerluCetak: order,
+          });
+          return false;
+        }
+
+        setAksi({
+          tipe: "sukses",
+          teks:
+            hasil.jalur === "rawbt" ? teks.kasir.cetakBerhasil : teks.kasir.cetakDialog,
+        });
+        return true;
+      } finally {
+        setMencetakId(null);
+      }
+    },
+    []
+  );
+
+  /**
+   * Verifikasi order, lalu cetak struk thermal.
+   *
+   * Urutan penting: verifikasi dulu (status di server berubah), baru cetak.
+   * Bila pencetakan gagal, verifikasi TETAP berhasil — pesannya dipisah supaya
+   * kasir tidak mengira pesanan belum terverifikasi lalu menekan tombol lagi.
    */
   const handleVerify = async (order: KasirOrder) => {
     setBusyId(order.transaction.id);
-    setActionMessage(null);
+    setAksi(null);
 
     try {
       const result = await verifyOnlineOrder(order.transaction.id);
-      setActionMessage({
-        tipe: "sukses",
-        teks: `${order.transaction.nomor_transaksi}: ${result.message}`,
+
+      // Nama kasir untuk kop "Diverifikasi oleh" diambil dari sesi staf
+      // (server juga menyimpan `verified_by`).
+      const tercetak = await cetakStruk(order, {
+        oleh: staff?.name ?? null,
+        pada: new Date().toISOString(),
       });
-      await loadOrders();
+
+      setAksi({
+        tipe: "sukses",
+        teks: `${order.transaction.nomor_transaksi}: ${result.message}${
+          tercetak ? "" : ` — ${teks.kasir.cetakGagal}`
+        }`,
+        orderPerluCetak: tercetak ? null : order,
+      });
+
+      await loadOrders(filterAktif);
     } catch (err: any) {
       if (err instanceof StaffSessionUnavailableError) {
-        setActionMessage({
+        setAksi({
           tipe: "error",
           teks: isCrossOriginWeb()
             ? `${err.message} Rute verifikasi adalah rute web Laravel (cookie + CSRF), sedangkan CORS backend hanya mengizinkan path api/*. Buka halaman kasir backend untuk memverifikasi pesanan ini.`
             : err.message,
         });
       } else {
-        setActionMessage({
+        setAksi({
           tipe: "error",
           teks: err?.message ?? teks.kasir.verifikasiGagal,
         });
@@ -279,24 +528,21 @@ export default function KasirOrdersScreen() {
 
   const handleReject = async (order: KasirOrder) => {
     setBusyId(order.transaction.id);
-    setActionMessage(null);
+    setAksi(null);
     try {
-      const result = await rejectOnlineOrder(
-        order.transaction.id,
-        rejectReason.trim()
-      );
-      setActionMessage({
+      const result = await rejectOnlineOrder(order.transaction.id, rejectReason.trim());
+      setAksi({
         tipe: "sukses",
         teks: `${order.transaction.nomor_transaksi}: ${result.message}`,
       });
       setRejectingId(null);
       setRejectReason("");
-      await loadOrders();
+      await loadOrders(filterAktif);
     } catch (err: any) {
       if (err instanceof StaffSessionUnavailableError) {
-        setActionMessage({ tipe: "error", teks: err.message });
+        setAksi({ tipe: "error", teks: err.message });
       } else {
-        setActionMessage({
+        setAksi({
           tipe: "error",
           teks: err?.message ?? teks.kasir.tolakGagal,
         });
@@ -308,7 +554,7 @@ export default function KasirOrdersScreen() {
 
   const onRefresh = () => {
     setRefreshing(true);
-    loadOrders();
+    void loadOrders(filterAktif);
   };
 
   // ---- Gate login staf ---------------------------------------------------
@@ -432,6 +678,7 @@ export default function KasirOrdersScreen() {
       <ScrollView
         className="flex-1"
         contentContainerStyle={{ padding: 16, paddingBottom: paddingBawahKonten(insets) }}
+        keyboardShouldPersistTaps="handled"
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -442,7 +689,7 @@ export default function KasirOrdersScreen() {
         }
       >
         {/* Identitas staf */}
-        <View className="mb-4 flex-row items-center gap-3 rounded-lg border border-neutral-200 bg-white p-3">
+        <View className="mb-3 flex-row items-center gap-3 rounded-lg border border-neutral-200 bg-white p-3">
           <View
             className="items-center justify-center rounded-full bg-primary-100"
             style={{ width: 36, height: 36 }}
@@ -476,16 +723,96 @@ export default function KasirOrdersScreen() {
           </Pressable>
         </View>
 
+        {/* ---- Pencarian + buka filter ---------------------------------- */}
+        <View className="mb-2 flex-row items-center gap-2">
+          <View
+            className="flex-1 flex-row items-center gap-2 rounded-md border border-neutral-200 bg-white px-3"
+            style={{ minHeight: 44 }}
+          >
+            <Search size={16} color={colors.neutral500} strokeWidth={1.75} />
+            <TextInput
+              value={filter.cari}
+              onChangeText={(cari) => setFilter((f) => ({ ...f, cari }))}
+              onSubmitEditing={cariSekarang}
+              returnKeyType="search"
+              placeholder={teks.kasir.filter.cariPlaceholder}
+              placeholderTextColor={colors.neutral400}
+              accessibilityLabel={teks.kasir.filter.cariLabel}
+              className="flex-1 font-inter text-sm text-neutral-900"
+            />
+            {filter.cari ? (
+              <Pressable
+                onPress={hapusPencarian}
+                accessibilityRole="button"
+                accessibilityLabel={teks.kasir.filter.hapusPencarian}
+                hitSlop={sizes.hitSlop}
+                className="h-9 w-9 items-center justify-center"
+              >
+                <XCircle size={16} color={colors.neutral500} strokeWidth={1.75} />
+              </Pressable>
+            ) : null}
+          </View>
+
+          <Pressable
+            onPress={() => setFilterTerbuka(true)}
+            accessibilityRole="button"
+            accessibilityLabel={teks.kasir.filter.buka}
+            accessibilityHint={ringkasanFilter}
+            className={`flex-row items-center gap-1.5 rounded-md border px-3 ${
+              jumlahFilter > 0
+                ? "border-primary-200 bg-primary-50"
+                : "border-neutral-200 bg-white"
+            }`}
+            style={{ minHeight: 44 }}
+          >
+            <FilterIcon
+              size={16}
+              color={jumlahFilter > 0 ? colors.primary700 : colors.neutral700}
+              strokeWidth={1.75}
+            />
+            <Text
+              className={`font-inter-medium text-xs ${
+                jumlahFilter > 0 ? "text-primary-800" : "text-neutral-700"
+              }`}
+              maxFontSizeMultiplier={1.3}
+            >
+              {teks.kasir.filter.judul}
+              {jumlahFilter > 0 ? ` (${jumlahFilter})` : ""}
+            </Text>
+          </Pressable>
+        </View>
+
+        {/* Ringkasan filter + jumlah hasil */}
+        <View className="mb-3 flex-row items-start justify-between gap-2">
+          <Text
+            className="flex-1 font-inter text-caption text-neutral-500"
+            numberOfLines={2}
+            maxFontSizeMultiplier={1.3}
+          >
+            {ringkasanFilter}
+          </Text>
+          <Text
+            className="font-inter-medium text-caption text-neutral-700 tabular-nums"
+            maxFontSizeMultiplier={1.3}
+          >
+            {halaman > 1 || totalOrder > orders.length
+              ? teks.kasir.filter.hasilSebagian
+                  .replace("{tampil}", String(orders.length))
+                  .replace("{total}", String(totalOrder))
+              : teks.kasir.filter.hasil.replace("{jumlah}", String(totalOrder))}
+          </Text>
+        </View>
+
         {error ? (
           <View className="mb-4">
-            <ErrorState pesan={error} onRetry={loadOrders} kompak />
+            <ErrorState pesan={error} onRetry={onRefresh} kompak />
           </View>
         ) : null}
 
-        {actionMessage ? (
+        {aksi ? (
           <View
             className={`mb-4 rounded-md border p-3 ${
-              actionMessage.tipe === "sukses"
+              aksi.tipe === "sukses"
                 ? "border-success-100 bg-success-100"
                 : "border-danger-100 bg-danger-50"
             }`}
@@ -493,12 +820,30 @@ export default function KasirOrdersScreen() {
           >
             <Text
               className={`font-inter text-xs ${
-                actionMessage.tipe === "sukses" ? "text-success-700" : "text-danger-700"
+                aksi.tipe === "sukses" ? "text-success-700" : "text-danger-700"
               }`}
             >
-              {actionMessage.teks}
+              {aksi.teks}
             </Text>
-            {actionMessage.tipe === "error" ? (
+
+            {aksi.orderPerluCetak ? (
+              <Pressable
+                onPress={() => {
+                  const order = aksi.orderPerluCetak;
+                  if (order) void cetakStruk(order);
+                }}
+                accessibilityRole="button"
+                accessibilityLabel={teks.kasir.cetakStruk}
+                className="mt-2 min-h-[44px] flex-row items-center gap-1.5 self-start"
+              >
+                <Printer size={14} color={colors.primary700} strokeWidth={1.75} />
+                <Text className="font-inter-medium text-xs text-primary-700">
+                  {teks.kasir.cetakStruk}
+                </Text>
+              </Pressable>
+            ) : null}
+
+            {aksi.tipe === "error" ? (
               <Pressable
                 onPress={() => Linking.openURL(onlineOrdersPageUrl()).catch(() => {})}
                 accessibilityRole="link"
@@ -531,8 +876,16 @@ export default function KasirOrdersScreen() {
           <View className="overflow-hidden rounded-lg border border-neutral-200 bg-white">
             <EmptyState
               icon={<PackageCheck size={36} color={colors.primary600} strokeWidth={1.75} />}
-              title={teks.kasir.kosong.judul}
-              description={teks.kasir.kosong.deskripsi}
+              title={
+                jumlahFilter > 0 ? teks.kasir.filter.hasilKosong : teks.kasir.kosong.judul
+              }
+              description={
+                jumlahFilter > 0
+                  ? teks.kasir.filter.hasilKosongDeskripsi
+                  : teks.kasir.kosong.deskripsi
+              }
+              ctaLabel={jumlahFilter > 0 ? teks.kasir.filter.reset : undefined}
+              onCtaPress={jumlahFilter > 0 ? resetFilter : undefined}
             />
           </View>
         ) : (
@@ -541,6 +894,7 @@ export default function KasirOrdersScreen() {
               key={order.transaction.id}
               order={order}
               busy={busyId === order.transaction.id}
+              mencetak={mencetakId === order.transaction.id}
               rejecting={rejectingId === order.transaction.id}
               rejectReason={rejectReason}
               onChangeRejectReason={setRejectReason}
@@ -551,10 +905,158 @@ export default function KasirOrdersScreen() {
                 )
               }
               onConfirmReject={() => handleReject(order)}
+              onCetak={() => void cetakStruk(order)}
             />
           ))
         )}
+
+        {/*
+          Muat halaman berikutnya. Tanpa tombol ini daftar mentok di 50 order
+          pertama walaupun server mengirim `last_page` — kasir tidak punya cara
+          melihat order ke-51 dan seterusnya.
+        */}
+        {halaman < halamanTerakhir ? (
+          <Button
+            title={
+              memuatLagi
+                ? teks.kasir.filter.memuatLagi
+                : teks.kasir.filter.muatLagi.replace(
+                    "{sisa}",
+                    String(Math.max(0, totalOrder - orders.length))
+                  )
+            }
+            variant="outline"
+            size="md"
+            fullWidth
+            loading={memuatLagi}
+            onPress={muatLagi}
+          />
+        ) : null}
       </ScrollView>
+
+      {/* ---- Dialog filter ---------------------------------------------- */}
+      <Dialog
+        visible={filterTerbuka}
+        onClose={() => setFilterTerbuka(false)}
+        title={teks.kasir.filter.judul}
+        description={ringkasanFilter}
+        actions={
+          <>
+            <Button
+              title={teks.kasir.filter.reset}
+              variant="outline"
+              size="md"
+              className="flex-1"
+              onPress={resetFilter}
+            />
+            <Button
+              title={teks.kasir.filter.terapkan}
+              size="md"
+              className="flex-1"
+              disabled={!!galatTanggal}
+              onPress={terapkanFilter}
+            />
+          </>
+        }
+      >
+        <ScrollView className="max-h-[60vh]" keyboardShouldPersistTaps="handled">
+          {/* Status */}
+          <Text className="mb-2 font-inter-medium text-xs text-neutral-700">
+            {teks.kasir.filter.status}
+          </Text>
+          <View className="mb-4 flex-row flex-wrap gap-2">
+            {LABEL_STATUS.map((s) => (
+              <Chip
+                key={s.kunci}
+                label={s.label}
+                selected={filter.status === s.kunci}
+                onPress={() => setFilter((f) => ({ ...f, status: s.kunci }))}
+              />
+            ))}
+          </View>
+
+          {/* Rentang tanggal */}
+          <Text className="mb-2 font-inter-medium text-xs text-neutral-700">
+            {teks.kasir.filter.rentang}
+          </Text>
+          <View className="mb-3 flex-row flex-wrap gap-2">
+            {PRESET_RENTANG.map((r) => (
+              <Chip
+                key={r.kunci}
+                label={r.label}
+                selected={filter.rentang === r.kunci}
+                onPress={() => setFilter((f) => ({ ...f, rentang: r.kunci }))}
+              />
+            ))}
+            <Chip
+              label={teks.kasir.filter.kustom}
+              selected={filter.rentang === "kustom"}
+              onPress={() => setFilter((f) => ({ ...f, rentang: "kustom" }))}
+            />
+          </View>
+
+          {filter.rentang === "kustom" ? (
+            <View className="mb-4" style={{ gap: 12 }}>
+              <Input
+                label={`${teks.kasir.filter.dariTanggal} (${teks.kasir.filter.formatTanggal})`}
+                value={filter.dariTanggal}
+                onChangeText={(dariTanggal) => setFilter((f) => ({ ...f, dariTanggal }))}
+                placeholder="2026-10-01"
+                autoCapitalize="none"
+                keyboardType="numbers-and-punctuation"
+              />
+              <Input
+                label={`${teks.kasir.filter.sampaiTanggal} (${teks.kasir.filter.formatTanggal})`}
+                value={filter.sampaiTanggal}
+                onChangeText={(sampaiTanggal) =>
+                  setFilter((f) => ({ ...f, sampaiTanggal }))
+                }
+                placeholder="2026-10-27"
+                autoCapitalize="none"
+                keyboardType="numbers-and-punctuation"
+              />
+            </View>
+          ) : null}
+
+          {galatTanggal ? (
+            <View className="mb-4 rounded-md border border-danger-100 bg-danger-50 p-3">
+              <Text className="font-inter text-xs text-danger-700">{galatTanggal}</Text>
+            </View>
+          ) : null}
+
+          {/* Metode bayar */}
+          <Text className="mb-2 font-inter-medium text-xs text-neutral-700">
+            {teks.kasir.filter.metode}
+          </Text>
+          <View className="mb-4 flex-row flex-wrap gap-2">
+            <Chip
+              label={teks.kasir.filter.semuaMetode}
+              selected={filter.metodePembayaranId === null}
+              onPress={() => setFilter((f) => ({ ...f, metodePembayaranId: null }))}
+            />
+            {metodeList.map((m) => (
+              <Chip
+                key={m.id}
+                label={m.nama_metode ?? String(m.id)}
+                selected={filter.metodePembayaranId === m.id}
+                onPress={() =>
+                  setFilter((f) => ({
+                    ...f,
+                    metodePembayaranId: f.metodePembayaranId === m.id ? null : m.id,
+                  }))
+                }
+              />
+            ))}
+          </View>
+
+          {filter.rentang === "kustom" && filter.dariTanggal ? (
+            <Text className="font-inter text-caption text-neutral-500">
+              {tanggalTampil(filter.dariTanggal)}
+              {filter.sampaiTanggal ? ` – ${tanggalTampil(filter.sampaiTanggal)}` : ""}
+            </Text>
+          ) : null}
+        </ScrollView>
+      </Dialog>
     </SafeAreaView>
   );
 }
@@ -562,39 +1064,56 @@ export default function KasirOrdersScreen() {
 interface KasirOrderCardProps {
   order: KasirOrder;
   busy: boolean;
+  mencetak: boolean;
   rejecting: boolean;
   rejectReason: string;
   onChangeRejectReason: (v: string) => void;
   onVerify: () => void;
   onStartReject: () => void;
   onConfirmReject: () => void;
+  onCetak: () => void;
 }
 
 const KasirOrderCard = ({
   order,
   busy,
+  mencetak,
   rejecting,
   rejectReason,
   onChangeRejectReason,
   onVerify,
   onStartReject,
   onConfirmReject,
+  onCetak,
 }: KasirOrderCardProps) => {
   const expiry = useOrderExpiry(order.transaction.order_expires_at, "pending");
   const trx = order.transaction;
+  // Order non-pending (hasil filter "Selesai"/"Ditolak"/"Semua") tidak boleh
+  // menampilkan hitung mundur atau tombol Verifikasi/Tolak.
+  const menunggu = (trx.status_transaksi ?? trx.status) === "pending";
+
+  const badge =
+    trx.status_transaksi === "selesai"
+      ? { label: teks.kasir.selesai, kelas: "bg-success-100", teks: "text-success-700" }
+      : trx.status_transaksi === "dibatalkan"
+        ? { label: teks.kasir.ditolak, kelas: "bg-danger-50", teks: "text-danger-700" }
+        : { label: teks.kasir.menunggu, kelas: "bg-warning-100", teks: "text-warning-700" };
 
   return (
     <View className="mb-3 overflow-hidden rounded-lg border border-neutral-200 bg-white">
       <View className="p-4">
-        <View className="mb-2 flex-row items-start justify-between gap-3">
+        <View className="mb-2 flex-row items-start justify-between gap-2">
           <View className="flex-1">
-            <Text
-              className="font-inter-semibold text-sm text-neutral-900"
-              numberOfLines={1}
-              maxFontSizeMultiplier={1.3}
-            >
-              {trx.nomor_transaksi}
-            </Text>
+            <View className="flex-row flex-wrap items-center gap-2">
+              <Text
+                className="font-inter-semibold text-sm text-neutral-900"
+                numberOfLines={1}
+                maxFontSizeMultiplier={1.3}
+              >
+                {trx.nomor_transaksi}
+              </Text>
+              <TombolSalin nilai={trx.nomor_transaksi} denganTeks />
+            </View>
             <Text
               className="font-inter text-xs text-neutral-500"
               maxFontSizeMultiplier={1.3}
@@ -612,24 +1131,24 @@ const KasirOrderCard = ({
               </Text>
             ) : null}
           </View>
-          <View className="rounded-full bg-warning-100 px-2.5 py-1">
+          <View className={`rounded-full px-2.5 py-1 ${badge.kelas}`}>
             <Text
-              className="font-inter-medium text-xs text-warning-700"
+              className={`font-inter-medium text-xs ${badge.teks}`}
               maxFontSizeMultiplier={1.3}
             >
-              {teks.kasir.menunggu}
+              {badge.label}
             </Text>
           </View>
         </View>
 
-        {expiry.expired ? (
+        {menunggu && expiry.expired ? (
           <View className="mb-2 flex-row items-center gap-1.5">
             <XCircle size={14} color={colors.danger700} strokeWidth={1.75} />
             <Text className="font-inter text-xs text-danger-700">
               {teks.kasir.kedaluwarsa}
             </Text>
           </View>
-        ) : expiry.countdown ? (
+        ) : menunggu && expiry.countdown ? (
           <View className="mb-2 flex-row items-center gap-1.5">
             <Clock size={14} color={colors.warning700} strokeWidth={1.75} />
             <Text className="font-inter text-xs text-warning-700 tabular-nums">
@@ -644,8 +1163,11 @@ const KasirOrderCard = ({
               {teks.kasir.itemTidakAda}
             </Text>
           ) : (
-            order.items.map((item) => (
-              <View key={item.id} className="flex-row justify-between gap-2 py-1">
+            order.items.map((item, indeks) => (
+              <View
+                key={`${item.id ?? "item"}-${indeks}`}
+                className="flex-row justify-between gap-2 py-1"
+              >
                 <Text
                   className="flex-1 font-inter text-sm text-neutral-700"
                   numberOfLines={1}
@@ -653,6 +1175,7 @@ const KasirOrderCard = ({
                 >
                   {item.jumlah}× {item.nama_produk}
                   {item.nama_varian ? ` (${item.nama_varian})` : ""}
+                  {item.nama_satuan ? ` / ${item.nama_satuan}` : ""}
                 </Text>
                 <Text
                   className="font-inter text-sm text-neutral-700 tabular-nums"
@@ -724,23 +1247,39 @@ const KasirOrderCard = ({
         ) : null}
 
         <View className="flex-row gap-2">
-          <Button
-            title={rejecting ? teks.kasir.batalTolak : teks.kasir.tolak}
-            variant="outline"
-            size="md"
-            className="flex-1 border-danger-500"
-            disabled={busy}
-            icon={<XCircle size={16} color={colors.danger700} strokeWidth={1.75} />}
-            onPress={onStartReject}
-          />
-          <Button
-            title={teks.kasir.verifikasi}
-            size="md"
-            className="flex-1"
-            loading={busy}
-            icon={<CheckCheck size={16} color={colors.white} strokeWidth={1.75} />}
-            onPress={onVerify}
-          />
+          {menunggu ? (
+            <>
+              <Button
+                title={rejecting ? teks.kasir.batalTolak : teks.kasir.tolak}
+                variant="outline"
+                size="md"
+                className="flex-1 border-danger-500"
+                disabled={busy}
+                icon={<XCircle size={16} color={colors.danger700} strokeWidth={1.75} />}
+                onPress={onStartReject}
+              />
+              <Button
+                title={teks.kasir.verifikasi}
+                size="md"
+                className="flex-1"
+                loading={busy}
+                icon={<CheckCheck size={16} color={colors.white} strokeWidth={1.75} />}
+                onPress={onVerify}
+              />
+            </>
+          ) : (
+            // Order yang sudah diproses tetap bisa dicetak ulang (struk hilang
+            // / printer macet saat verifikasi).
+            <Button
+              title={mencetak ? teks.kasir.mencetak : teks.kasir.cetakStruk}
+              variant="outline"
+              size="md"
+              fullWidth
+              loading={mencetak}
+              icon={<Printer size={16} color={colors.primary700} strokeWidth={1.75} />}
+              onPress={onCetak}
+            />
+          )}
         </View>
       </View>
     </View>

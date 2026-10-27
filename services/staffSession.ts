@@ -431,15 +431,57 @@ interface PaginatedTransactions {
 }
 
 /**
- * Order online yang masih menunggu verifikasi.
+ * Order online sesuai filter layar "Order Masuk".
  *
- * `GET /api/transactions` mengembalikan seluruh transaksi berstatus pending;
- * order online dibedakan lewat `jenis_transaksi === 'online'`
- * (kolom ini ada di transform backend walau belum ada di tipe TS lama).
+ * Backend (`TransaksiController@index`) sudah memfilter di sisi server:
+ * `jenis=online`, status, rentang tanggal, metode bayar, dan `search`
+ * (nomor transaksi / nama / telepon pelanggan). Sebelumnya aplikasi menarik
+ * 50 transaksi lalu membuang yang bukan online+pending di klien — order lama
+ * hilang dari daftar tanpa penjelasan begitu jumlah transaksi melewati batas.
+ *
+ * @param queryString hasil `bangunQueryOrder()` (`src/lib/filterOrder.ts`).
+ */
+export const fetchOnlineOrders = async (queryString: string): Promise<Transaction[]> => {
+  const hasil = await fetchOnlineOrdersBerhalaman(queryString);
+  return hasil.rows;
+};
+
+/**
+ * Versi yang juga mengembalikan `meta` paginasi.
+ *
+ * Tanpa `meta`, layar hanya bisa menghitung `orders.length` (sepanjang satu
+ * halaman) dan tidak tahu ada halaman berikutnya — order ke-51 dan seterusnya
+ * tidak pernah bisa dijangkau walau backend sudah mengirim `last_page`.
+ */
+export const fetchOnlineOrdersBerhalaman = async (
+  queryString: string
+): Promise<{
+  rows: Transaction[];
+  total: number;
+  halaman: number;
+  halamanTerakhir: number;
+}> => {
+  const result = await staffRequest<PaginatedTransactions>(`/transactions?${queryString}`);
+
+  const rows = Array.isArray(result.data) ? result.data : [];
+
+  return {
+    // Jaring pengaman: backend versi lama belum mengenal `jenis`/`search`,
+    // sehingga penyaringan online tetap dilakukan di klien bila perlu.
+    rows: rows.filter((trx: any) => (trx.jenis_transaksi ?? "").toLowerCase() === "online"),
+    total: Number(result.meta?.total) || rows.length,
+    halaman: Number(result.meta?.current_page) || 1,
+    halamanTerakhir: Number(result.meta?.last_page) || 1,
+  };
+};
+
+/**
+ * Order online yang masih menunggu verifikasi (perilaku lama, dipertahankan
+ * untuk pemanggil yang belum memakai filter).
  */
 export const fetchPendingOnlineOrders = async (): Promise<Transaction[]> => {
   const result = await staffRequest<PaginatedTransactions>(
-    "/transactions?status=pending&per_page=50&sort_direction=desc"
+    "/transactions?jenis=online&status=pending&per_page=50&sort_direction=desc"
   );
 
   const rows = Array.isArray(result.data) ? result.data : [];
@@ -457,6 +499,27 @@ export const fetchStaffOrderDetail = async (id: number) => {
     `/transactions/${id}`
   );
   return result.data;
+};
+
+/**
+ * Metode pembayaran aktif untuk filter layar kasir.
+ *
+ * Memakai token staf lewat `staffRequest` — `apiService.getPaymentMethods()`
+ * memakai `auth_token` (token pelanggan), sehingga di perangkat kasir hasilnya
+ * 401 dan chip metode bayar kosong. Kegagalan tidak fatal: pemanggil
+ * menampilkan chip "Semua metode" saja.
+ */
+export const fetchStaffPaymentMethods = async (): Promise<
+  { id: number; nama_metode: string; jenis_pembayaran?: string }[]
+> => {
+  const result = await staffRequest<{ success: boolean; data: any[] }>("/payment-methods");
+  const rows = Array.isArray(result.data) ? result.data : [];
+
+  return rows.map((m: any) => ({
+    id: Number(m.id),
+    nama_metode: String(m.nama_metode ?? m.nama ?? `Metode ${m.id}`),
+    jenis_pembayaran: m.jenis_pembayaran,
+  }));
 };
 
 export interface PosTransactionInput {
