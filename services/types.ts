@@ -1,4 +1,8 @@
 // Base API Response Types
+import type { BarisHargaSatuan, GrosirRingkas } from "../src/lib/hargaGrosir";
+
+export type { BarisHargaSatuan, GrosirRingkas, GrosirTier } from "../src/lib/hargaGrosir";
+
 export interface ApiResponse<T = any> {
   success: boolean;
   data: T;
@@ -153,6 +157,19 @@ export interface Product {
   is_favorite?: boolean;
   rating?: number;
   reviews_count?: number;
+
+  /**
+   * Harga grosir (dari `harga_varian_satuan` lewat `/public/products`).
+   * null/kosong = produk belum dikonfigurasi → tampilan memakai harga ecer
+   * seperti sebelumnya. Bentuk detail: `src/lib/hargaGrosir.ts`.
+   */
+  grosir?: GrosirRingkas | null;
+  harga_grosir_min?: number | string | null;
+  /** Matriks harga varian × satuan + tier (hanya endpoint detail). */
+  harga_jual_satuan?: BarisHargaSatuan[];
+
+  /** Fitur Naikkan Produk: produk sedang didorong ke atas hasil pencarian. */
+  boost?: boolean;
 }
 
 export interface ProductVariant {

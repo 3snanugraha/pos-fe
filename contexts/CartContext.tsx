@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { hargaEfektif } from '../src/lib/hargaGrosir';
 
 export interface CartItem {
   id: number;
@@ -13,6 +14,15 @@ export interface CartItem {
   varian_id?: number;
   varian_nama?: string;
   subtotal: number;
+
+  /** Harga ecer (tier jangkar) — acuan coret saat harga grosir dipakai. */
+  harga_ecer?: number;
+  /** Tier harga yang sedang dipakai ('Ecer', 'Grosir 1', …). */
+  nama_tier?: string;
+  /** Satuan jual baris ini (pcs/dus); dikirim ke API checkout. */
+  satuan_id?: number | null;
+  /** Semua tier grosir yang dikenal untuk baris ini (dari detail produk). */
+  tier?: { nama_tier: string; harga: number; min_qty: number; is_default?: boolean }[];
 }
 
 interface CartContextType {
@@ -149,8 +159,25 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const stokAcuan = Number(
       varian?.stok ?? product.stok ?? product.total_stok ?? 0
     ) || 0;
-    const hargaSatuan =
-      Number(varian?.harga ?? varian?.harga_jual ?? product.harga) || 0;
+
+    /**
+     * Harga SATUAN untuk qty yang benar-benar masuk keranjang.
+     *
+     * `varian.harga` dari layar detail sudah berupa harga efektif qty itu
+     * (bisa grosir). Saat baris SUDAH ada, qty gabungan bisa melewati ambang
+     * tier berikutnya — karena itu harga dihitung ulang di sini dengan aturan
+     * yang sama (`hargaEfektif`). Tanpa perhitungan ulang, menambah 1 pcs ke
+     * baris berisi 11 pcs tetap memakai harga ecer walau qty menjadi 12.
+     */
+    const tierBaris = varian?.tier ?? existingItem?.tier ?? [];
+    const hargaEcer =
+      Number(varian?.harga_ecer ?? existingItem?.harga_ecer ?? varian?.harga_jual ?? product.harga) || 0;
+
+    const hitungHarga = (qty: number): { harga: number; nama_tier: string } => {
+      const hasil = hargaEfektif(tierBaris, qty, hargaEcer);
+
+      return { harga: hasil.harga, nama_tier: hasil.namaTier };
+    };
 
     if (existingItem) {
       // Update existing item quantity
@@ -161,6 +188,8 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(`Stok tidak mencukupi. Maksimal ${maxQuantity} item.`);
       }
 
+      const hargaBaru = hitungHarga(newQuantity);
+
       setItems((prev) =>
         bersihkanLegacy(prev).map((item) =>
           item.id === itemId
@@ -168,7 +197,11 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 ...item,
                 quantity: newQuantity,
                 stok_tersedia: stokAcuan || item.stok_tersedia,
-                subtotal: item.harga * newQuantity,
+                harga: hargaBaru.harga,
+                nama_tier: hargaBaru.nama_tier,
+                harga_ecer: hargaEcer || item.harga_ecer,
+                satuan_id: varian?.satuan_id ?? item.satuan_id ?? null,
+                subtotal: hargaBaru.harga * newQuantity,
               }
             : item
         )
@@ -179,18 +212,24 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         throw new Error(`Stok tidak mencukupi. Maksimal ${stokAcuan} item.`);
       }
 
+      const hargaBaru = hitungHarga(quantity);
+
       const newItem: CartItem = {
         id: itemId,
         produk_id: product.id,
         nama_produk: product.nama_produk,
-        harga: hargaSatuan,
+        harga: hargaBaru.harga,
         quantity,
         gambar_url: product.gambar_url,
         kategori_nama: product.kategori_nama,
         stok_tersedia: stokAcuan,
         varian_id: varian?.id,
         varian_nama: varian?.nama_varian,
-        subtotal: hargaSatuan * quantity,
+        subtotal: hargaBaru.harga * quantity,
+        harga_ecer: hargaEcer || undefined,
+        nama_tier: hargaBaru.nama_tier,
+        satuan_id: varian?.satuan_id ?? null,
+        tier: tierBaris.length > 0 ? tierBaris : undefined,
       };
 
       setItems((prev) => [...bersihkanLegacy(prev), newItem]);
@@ -212,11 +251,24 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({ children
         if (item.id === itemId) {
           const maxQuantity = item.stok_tersedia;
           const finalQuantity = Math.min(quantity, maxQuantity);
-          
+
+          /**
+           * Harga dihitung ULANG untuk qty baru: menaikkan qty melewati
+           * `min_qty` harus menurunkan harga per satuan (dan sebaliknya saat
+           * qty diturunkan). Tanpa ini, subtotal memakai harga tier lama.
+           */
+          const hargaBaru = hargaEfektif(
+            item.tier ?? [],
+            finalQuantity,
+            item.harga_ecer ?? item.harga,
+          );
+
           return {
             ...item,
             quantity: finalQuantity,
-            subtotal: item.harga * finalQuantity,
+            harga: hargaBaru.harga,
+            nama_tier: hargaBaru.namaTier,
+            subtotal: hargaBaru.harga * finalQuantity,
           };
         }
         return item;

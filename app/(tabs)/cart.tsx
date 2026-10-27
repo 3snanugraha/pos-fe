@@ -200,6 +200,9 @@ export default function CartScreen() {
                         item.varian_nama
                           ? teks.keranjang.varian.replace("{nama}", item.varian_nama)
                           : null,
+                        // Tier harga: pembeli melihat KENAPA harga satuannya
+                        // lebih murah (grosir) langsung di baris keranjang.
+                        item.nama_tier && item.nama_tier !== "Ecer" ? item.nama_tier : null,
                         item.kategori_nama,
                       ]
                         .filter(Boolean)

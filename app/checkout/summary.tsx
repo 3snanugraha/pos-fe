@@ -121,9 +121,17 @@ export default function OrderSummaryScreen() {
                   subtotal={item.subtotal}
                   gambarUrl={item.gambar_url ?? null}
                   keterangan={
-                    item.varian_nama
-                      ? teks.keranjang.varian.replace("{nama}", item.varian_nama)
-                      : item.kategori_nama ?? null
+                    [
+                      item.varian_nama
+                        ? teks.keranjang.varian.replace("{nama}", item.varian_nama)
+                        : null,
+                      // Tier harga dari keranjang: pembeli tahu apakah ia
+                      // mendapat harga ecer atau grosir di ringkasan ini.
+                      item.nama_tier ?? null,
+                      item.kategori_nama ?? null,
+                    ]
+                      .filter(Boolean)
+                      .join(" · ") || null
                   }
                 />
               </View>

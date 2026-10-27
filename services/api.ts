@@ -73,6 +73,12 @@ export interface Product {
     path_gambar: string;
     gambar_utama: boolean;
   }[];
+  /** Harga grosir dari backend (detail: `src/lib/hargaGrosir.ts`). */
+  grosir?: import("../src/lib/hargaGrosir").GrosirRingkas | null;
+  harga_grosir_min?: number | string | null;
+  harga_jual_satuan?: import("../src/lib/hargaGrosir").BarisHargaSatuan[];
+  /** Fitur Naikkan Produk. */
+  boost?: boolean;
 }
 
 export interface ProductCategory {
@@ -377,6 +383,13 @@ export const fetchProductById = async (id: number): Promise<Product> => {
       kategori: product.kategori,
       varian: product.varian,
       gambar: product.gambar,
+      // Harga grosir: `fetchProductById` memetakan ulang field satu per satu,
+      // jadi tanpa baris ini tier dari backend hilang di layar detail
+      // (akar masalah "harga grosir sudah disetting tapi tidak aktif di FE").
+      grosir: product.grosir ?? null,
+      harga_grosir_min: product.harga_grosir_min ?? null,
+      harga_jual_satuan: product.harga_jual_satuan ?? [],
+      boost: product.boost ?? false,
     };
   } catch (error) {
     console.error("Error fetching product:", error);

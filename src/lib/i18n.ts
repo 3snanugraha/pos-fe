@@ -539,6 +539,13 @@ export const teks = {
       "Tempel tautan ini di aplikasi chat atau media sosial pilihan Anda.",
     bagikanGagal: "Tautan produk tidak bisa dibagikan. Salin manual dari dialog ini.",
     salinTautan: "Salin Tautan",
+    /** Harga grosir (tier dari `harga_varian_satuan`). */
+    hargaGrosir: "Daftar Harga Ecer & Grosir",
+    hargaGrosirDeskripsi:
+      "Harga di bawah dihitung per {satuan}. Jumlah di keranjang menentukan harga yang dipakai — tidak perlu kode khusus.",
+    mulaiQty: "Mulai {jumlah} item",
+    berlakuSemuaQty: "Berlaku untuk semua jumlah",
+    hargaGrosirBerlaku: "{tier} · {harga}",
   },
 
   /** Barang disimpan (W4) — dialog & umpan balik. */

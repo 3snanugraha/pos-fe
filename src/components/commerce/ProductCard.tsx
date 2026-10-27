@@ -11,6 +11,7 @@ import {
   stokTampil,
   type ProdukApi,
 } from "../../lib/produk";
+import { labelGrosir } from "../../lib/hargaGrosir";
 import { rupiah } from "../../lib/format";
 import { teks } from "../../lib/i18n";
 import { colors, sizes } from "../../theme/tokens";
@@ -39,11 +40,14 @@ export function ProductCardGrid({ produk, onPress, width, className = "" }: Prod
   const rating = ratingTampil(produk);
   const ulasan = jumlahUlasan(produk);
   const stok = stokTampil(produk);
+  /** Harga grosir termurah — null bila produk belum punya tier grosir. */
+  const grosir = labelGrosir(produk.grosir, rupiah);
 
   const labelHarga = rupiah(harga);
   const labelA11y = [
     produk.nama_produk,
     labelHarga,
+    grosir,
     diskon > 0 ? `diskon ${diskon} persen` : null,
     rating != null ? `rating ${formatRating(rating)}` : null,
     stok <= 0 ? teks.beranda.stokHabis : null,
@@ -122,6 +126,17 @@ export function ProductCardGrid({ produk, onPress, width, className = "" }: Prod
           </Text>
         ) : null}
       </View>
+
+      {/* Harga grosir: pembeli tahu harga lebih murah SEBELUM membuka detail. */}
+      {grosir ? (
+        <Text
+          className="mt-0.5 font-inter-semibold text-caption text-success-700 tabular-nums"
+          numberOfLines={1}
+          maxFontSizeMultiplier={1.3}
+        >
+          {grosir}
+        </Text>
+      ) : null}
 
       {rating != null ? (
         <View className="mt-1 flex-row items-center gap-1">

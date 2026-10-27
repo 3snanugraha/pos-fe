@@ -27,6 +27,17 @@ export type ProdukApi = {
   variants_count?: number;
   rating?: number | string | null;
   reviews_count?: number | null;
+  /** Ringkasan harga grosir dari backend; null = belum dikonfigurasi. */
+  grosir?: {
+    min_qty: number | string;
+    harga: number | string;
+    nama_tier?: string;
+    nama_satuan?: string;
+    varian_id?: number | null;
+    hemat?: number | string;
+  } | null;
+  /** Fitur Naikkan Produk. */
+  boost?: boolean;
 };
 
 const angkaDari = (nilai: unknown): number | null => {

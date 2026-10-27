@@ -418,6 +418,11 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
         items: items.map((item) => ({
           produk_id: item.produk_id,
           varian_id: item.varian_id || undefined,
+          // Satuan jual baris ini: server memakai resolver (HargaService) dengan
+          // satuan & qty yang sama, jadi harga grosir yang tampil di keranjang
+          // juga yang ditagih. Tanpa `satuan_id`, server memakai satuan default
+          // dan baris ber-satuan dus bisa dihargai sebagai ecer.
+          satuan_id: item.satuan_id || undefined,
           jumlah: item.quantity,
         })),
         metode_pembayaran_id: metodeId,

@@ -23,6 +23,8 @@ import { rupiah } from "../../src/lib/format";
 import { paddingBawahStickyBar } from "../../src/lib/inset";
 import { teks } from "../../src/lib/i18n";
 import { formatRating, stokTampil } from "../../src/lib/produk";
+import { barisUntukVarian, hargaEfektif, teksUpsell } from "../../src/lib/hargaGrosir";
+import type { BarisHargaSatuan, GrosirRingkas } from "../../src/lib/hargaGrosir";
 import { useRingkasanProduk } from "../../src/screens/produk/useRingkasanProduk";
 import { colors, shadowStyle, sizes } from "../../src/theme/tokens";
 import { useCart } from "../../contexts/CartContext";
@@ -52,6 +54,10 @@ type ProdukDetail = {
   variants_count?: number;
   rating?: number;
   reviews_count?: number;
+  /** Matriks harga varian × satuan + tier (dari endpoint detail publik). */
+  harga_jual_satuan?: BarisHargaSatuan[];
+  /** Ringkasan grosir dari endpoint publik. */
+  grosir?: GrosirRingkas | null;
 };
 
 /**
@@ -136,6 +142,53 @@ export default function ProductDetailScreen() {
   const stokHabis = Number(stokEfektif) <= 0;
 
   /**
+   * Harga grosir untuk varian yang sedang dipilih.
+   *
+   * Sumbernya matriks `harga_jual_satuan` dari endpoint detail (bukan hitungan
+   * sendiri): backend sudah menentukan tier mana yang sah. `hargaEfektif`
+   * menirunya untuk qty di layar, jadi angka yang tampil = angka yang ditagih
+   * saat checkout. `hargaEcer` dipertahankan sebagai acuan coret.
+   */
+  const barisHarga = useMemo(
+    () => barisUntukVarian(produk?.harga_jual_satuan, varianTerpilih?.id ?? produk?.varian?.[0]?.id),
+    [produk, varianTerpilih],
+  );
+
+  const hargaQty = useMemo(
+    () => hargaEfektif(barisHarga?.tier ?? [], jumlah, hargaSatuan),
+    [barisHarga, jumlah, hargaSatuan],
+  );
+
+  /** Harga yang ditampilkan besar: harga efektif qty saat ini. */
+  const hargaTampilQty = hargaQty.harga;
+  const teksGrosir = teksUpsell(hargaQty.berikut, rupiah);
+
+  /**
+   * Seluruh tingkat harga untuk daftar "Ecer & Grosir": tier dari matriks
+   * backend, ditambah baris Ecer bila backend hanya mengirim tier grosir.
+   * Diurutkan menurut min_qty supaya terbaca sebagai tangga harga.
+   */
+  const tierTampil = useMemo(() => {
+    const dariBackend = (barisHarga?.tier ?? []).map((t) => ({
+      nama_tier: String(t.nama_tier ?? "Grosir"),
+      harga: Number(t.harga) || 0,
+      min_qty: Number(t.min_qty) || 1,
+      is_default: Boolean(t.is_default),
+    }));
+
+    if (dariBackend.length === 0) return [];
+
+    const adaEcer = dariBackend.some((t) => t.min_qty <= 1);
+    const ecer = hargaQty.hargaEcer;
+
+    const lengkap = adaEcer || ecer <= 0
+      ? dariBackend
+      : [{ nama_tier: "Ecer", harga: ecer, min_qty: 1, is_default: true }, ...dariBackend];
+
+    return [...lengkap].sort((a, b) => a.min_qty - b.min_qty);
+  }, [barisHarga, hargaQty.hargaEcer]);
+
+  /**
    * Rating & jumlah ulasan dibaca langsung dari endpoint publik lewat hook
    * terpisah: `fetchProductById` (services/api.ts, tidak diubah pada W3) hanya
    * meneruskan field yang dipakai keranjang sehingga rating hilang di sana.
@@ -177,10 +230,26 @@ export default function ProductDetailScreen() {
       return false;
     }
     try {
-      // `harga` dimasukkan agar CartContext menerima bentuk yang sama
-      // seperti versi lama (harga_jual → harga).
+      /**
+       * Harga yang dikirim ke keranjang = harga EFEKTIF qty ini (bisa harga
+       * grosir), bukan selalu harga ecer varian. Sebelumnya baris keranjang
+       * memakai `harga_jual` sehingga pembeli yang memesan 12 pcs melihat
+       * harga grosir di layar tetapi ditagih ecer di keranjang.
+       *
+       * Server tetap menghitung ulang harga saat checkout (otoritas di sana);
+       * ini hanya supaya tampilan keranjang/ringkasan tidak menipu.
+       */
       const varianUntukKeranjang = varianTerpilih
-        ? { ...varianTerpilih, harga: varianTerpilih.harga_jual }
+        ? {
+            ...varianTerpilih,
+            harga: hargaQty.harga,
+            harga_ecer: hargaQty.hargaEcer,
+            nama_tier: hargaQty.namaTier,
+            satuan_id: barisHarga?.satuan_id ?? null,
+            // Tier lengkap dipakai CartContext untuk menghitung ulang harga saat
+            // qty berubah (mis. 11 → 12 melewati ambang).
+            tier: barisHarga?.tier ?? [],
+          }
         : undefined;
 
       await addItem(produk, jumlah, varianUntukKeranjang);
@@ -192,7 +261,7 @@ export default function ProductDetailScreen() {
       );
       return false;
     }
-  }, [produk, perluPilihVarian, varianTerpilih, addItem, jumlah]);
+  }, [produk, perluPilihVarian, varianTerpilih, addItem, jumlah, hargaQty, barisHarga]);
 
   const onTambahKeranjang = async () => {
     setMemproses(true);
@@ -370,17 +439,38 @@ export default function ProductDetailScreen() {
 
           <View className="mt-2 flex-row flex-wrap items-baseline gap-x-2">
             <Text className="font-inter-bold text-2xl text-neutral-900 tabular-nums">
-              {rupiah(hargaSatuan)}
+              {rupiah(hargaTampilQty)}
             </Text>
-            {hargaCoret ? (
+            {/*
+              Harga coret: acuan tertinggi antara harga ecer varian dan harga
+              efektif qty ini, supaya saat grosir aktif harga ecer tampil
+              sebagai pembanding yang sah (bukan badge diskon karangan).
+            */}
+            {Math.max(hargaCoret ?? 0, hargaQty.hargaEcer) > hargaTampilQty ? (
               <Text className="font-inter text-sm text-neutral-400 line-through tabular-nums">
-                {rupiah(hargaCoret)}
+                {rupiah(Math.max(hargaCoret ?? 0, hargaQty.hargaEcer))}
               </Text>
             ) : null}
-            {diskon > 0 ? (
+            {hargaQty.grosir ? (
+              <Badge
+                label={hargaQty.namaTier}
+                variant="success"
+                accessibilityLabel={`Harga ${hargaQty.namaTier} berlaku untuk ${jumlah} item`}
+              />
+            ) : diskon > 0 ? (
               <Badge label={`-${diskon}%`} accessibilityLabel={teks.produk.diskonPersen.replace("{persen}", String(diskon))} />
             ) : null}
           </View>
+
+          {/* Upsell grosir: menyebut ambang & harga berikutnya, bukan sekadar "ada grosir". */}
+          {teksGrosir ? (
+            <Text
+              className="mt-1 font-inter-medium text-xs text-success-700"
+              maxFontSizeMultiplier={1.3}
+            >
+              {teksGrosir}
+            </Text>
+          ) : null}
 
           <View className="mt-2 flex-row flex-wrap items-center gap-2">
             <Text className="font-inter text-xs text-neutral-500">
@@ -486,6 +576,71 @@ export default function ProductDetailScreen() {
             contextLabel={produk.nama_produk}
           />
         </View>
+
+        {/*
+          Daftar harga Ecer & Grosir — pembeli melihat seluruh tingkat harga
+          sebelum menambah qty. Daftar ini hanya muncul bila backend benar-benar
+          mengirim tier (produk legacy tetap bersih tanpa bagian kosong).
+        */}
+        {tierTampil.length > 0 ? (
+          <View className="mt-2 bg-white px-4 py-4" testID="tabel-harga-grosir">
+            <Text className="mb-1 font-inter-semibold text-base text-neutral-900">
+              {teks.produk.hargaGrosir}
+            </Text>
+            <Text className="mb-3 font-inter text-xs text-neutral-500">
+              {teks.produk.hargaGrosirDeskripsi.replace(
+                "{satuan}",
+                barisHarga?.nama_satuan ?? "pcs",
+              )}
+            </Text>
+
+            <View className="gap-1.5">
+              {tierTampil.map((t) => {
+                const aktif = hargaQty.namaTier === t.nama_tier;
+
+                return (
+                  <View
+                    key={t.nama_tier}
+                    className={`flex-row items-center justify-between gap-3 rounded-md border px-3 py-2 ${
+                      aktif ? "border-success-500 bg-success-50" : "border-neutral-200 bg-white"
+                    }`}
+                    style={{ minHeight: sizes.minTouchTarget }}
+                  >
+                    <View className="min-w-0 flex-1">
+                      <Text
+                        className={`font-inter-medium text-sm ${
+                          aktif ? "text-success-700" : "text-neutral-900"
+                        }`}
+                        numberOfLines={1}
+                        maxFontSizeMultiplier={1.3}
+                      >
+                        {t.nama_tier}
+                      </Text>
+                      <Text
+                        className="font-inter text-caption text-neutral-500"
+                        numberOfLines={1}
+                        maxFontSizeMultiplier={1.3}
+                      >
+                        {t.min_qty <= 1
+                          ? teks.produk.berlakuSemuaQty
+                          : teks.produk.mulaiQty.replace("{jumlah}", String(t.min_qty))}
+                      </Text>
+                    </View>
+
+                    <Text
+                      className={`font-inter-semibold text-sm tabular-nums ${
+                        aktif ? "text-success-700" : "text-neutral-900"
+                      }`}
+                      maxFontSizeMultiplier={1.3}
+                    >
+                      {rupiah(t.harga)}
+                    </Text>
+                  </View>
+                );
+              })}
+            </View>
+          </View>
+        ) : null}
 
         {/* Deskripsi. */}
         {produk.deskripsi ? (
