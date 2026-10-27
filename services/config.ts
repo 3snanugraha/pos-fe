@@ -60,6 +60,22 @@ const getCurrentEnvironment = (): keyof typeof environments => {
     return "production";
   }
 
+  /*
+   * `releaseChannel` sudah dihapus dari manifest Expo sejak SDK 49 (diganti
+   * `updates.channel` / `expoConfig.extra`), sehingga di SDK 57 nilainya
+   * SELALU undefined. Tanpa cabang di bawah, setiap build rilis — termasuk
+   * `npx expo export -p web` yang dipakai web ecommerce — dianggap
+   * "development" dan memakai `DEV_HOST` (`http://127.0.0.1:8000/api`).
+   * Akibatnya semua request dari web gagal (`Failed to fetch`) dan pengguna
+   * hanya melihat pesan galat generik "Terjadi kesalahan, silakan coba lagi".
+   *
+   * `__DEV__` adalah satu-satunya penanda mode yang di-inline Metro dengan
+   * benar: `true` saat `expo start`, `false` pada bundle hasil export/build.
+   */
+  if (typeof __DEV__ !== "undefined" && !__DEV__) {
+    return "production";
+  }
+
   return "development";
 };
 
