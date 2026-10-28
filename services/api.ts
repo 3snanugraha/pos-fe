@@ -77,6 +77,10 @@ export interface Product {
   grosir?: import("../src/lib/hargaGrosir").GrosirRingkas | null;
   harga_grosir_min?: number | string | null;
   harga_jual_satuan?: import("../src/lib/hargaGrosir").BarisHargaSatuan[];
+  /** Flash sale: harga efektif sudah masuk `harga_jual_satuan`, dua field ini
+   * hanya untuk badge & fallback produk legacy tanpa matriks. */
+  is_flash_sale?: boolean;
+  harga_flash_sale?: number | null;
   /** Fitur Naikkan Produk. */
   boost?: boolean;
 }
@@ -389,6 +393,10 @@ export const fetchProductById = async (id: number): Promise<Product> => {
       grosir: product.grosir ?? null,
       harga_grosir_min: product.harga_grosir_min ?? null,
       harga_jual_satuan: product.harga_jual_satuan ?? [],
+      // Flash sale: harga efektif sudah dibawa `harga_jual_satuan` (K1).
+      // Field ini dipakai badge + fallback produk legacy tanpa matriks.
+      is_flash_sale: product.is_flash_sale ?? false,
+      harga_flash_sale: product.harga_flash_sale ?? null,
       boost: product.boost ?? false,
     };
   } catch (error) {

@@ -23,7 +23,7 @@ import { rupiah } from "../../src/lib/format";
 import { paddingBawahStickyBar } from "../../src/lib/inset";
 import { teks } from "../../src/lib/i18n";
 import { formatRating, stokTampil } from "../../src/lib/produk";
-import { barisUntukVarian, hargaEfektif, teksUpsell } from "../../src/lib/hargaGrosir";
+import { barisUntukVarian, hargaEfektifBaris, NAMA_TIER_FLASH, teksUpsell } from "../../src/lib/hargaGrosir";
 import type { BarisHargaSatuan, GrosirRingkas } from "../../src/lib/hargaGrosir";
 import { useRingkasanProduk } from "../../src/screens/produk/useRingkasanProduk";
 import { colors, shadowStyle, sizes } from "../../src/theme/tokens";
@@ -58,6 +58,10 @@ type ProdukDetail = {
   harga_jual_satuan?: BarisHargaSatuan[];
   /** Ringkasan grosir dari endpoint publik. */
   grosir?: GrosirRingkas | null;
+  /** Flash sale: harga efektif sudah ada di `harga_jual_satuan` (K1);
+   * dua field ini untuk badge + fallback produk legacy tanpa matriks. */
+  is_flash_sale?: boolean;
+  harga_flash_sale?: number | null;
 };
 
 /**
@@ -144,29 +148,41 @@ export default function ProductDetailScreen() {
   /**
    * Harga grosir untuk varian yang sedang dipilih.
    *
-   * Sumbernya matriks `harga_jual_satuan` dari endpoint detail (bukan hitungan
-   * sendiri): backend sudah menentukan tier mana yang sah. `hargaEfektif`
-   * menirunya untuk qty di layar, jadi angka yang tampil = angka yang ditagih
-   * saat checkout. `hargaEcer` dipertahankan sebagai acuan coret.
+   * Sumbernya matriks `harga_jual_satuan` dari endpoint detail. Sejak keputusan
+   * K1 matriks itu sudah membawa HARGA EFEKTIF: `harga_ecer` = harga yang
+   * ditagih untuk qty 1 (harga flash bila promo aktif), `harga_ecer_normal` =
+   * harga master untuk coret, dan tier yang lebih mahal dari flash sudah
+   * berganti label `Flash Sale`. `hargaEfektifBaris` membaca kontrak itu, jadi
+   * angka di layar detail = angka yang ditagih checkout untuk qty yang sama.
+   * `flashFallback` menutup produk legacy / payload lama tanpa matriks.
    */
   const barisHarga = useMemo(
     () => barisUntukVarian(produk?.harga_jual_satuan, varianTerpilih?.id ?? produk?.varian?.[0]?.id),
     [produk, varianTerpilih],
   );
 
+  const flashFallback = produk?.is_flash_sale ? Number(produk.harga_flash_sale ?? 0) || null : null;
+
   const hargaQty = useMemo(
-    () => hargaEfektif(barisHarga?.tier ?? [], jumlah, hargaSatuan),
-    [barisHarga, jumlah, hargaSatuan],
+    () => hargaEfektifBaris(barisHarga, jumlah, hargaSatuan, flashFallback),
+    [barisHarga, jumlah, hargaSatuan, flashFallback],
   );
 
   /** Harga yang ditampilkan besar: harga efektif qty saat ini. */
   const hargaTampilQty = hargaQty.harga;
   const teksGrosir = teksUpsell(hargaQty.berikut, rupiah);
+  /** Flash dianggap tampil bila harga efektif lebih murah dari harga master. */
+  const flashTampil = hargaQty.flash && hargaQty.hargaNormal > hargaTampilQty;
 
   /**
    * Seluruh tingkat harga untuk daftar "Ecer & Grosir": tier dari matriks
-   * backend, ditambah baris Ecer bila backend hanya mengirim tier grosir.
+   * backend, ditambah baris ecer bila backend hanya mengirim tier grosir.
    * Diurutkan menurut min_qty supaya terbaca sebagai tangga harga.
+   *
+   * Saat flash aktif, baris pertama matriks sudah berupa `Flash Sale` (harga
+   * efektif), jadi baris "Ecer" sintetis tidak ditambahkan — harga ecer master
+   * tetap terlihat sebagai harga coret di judul, bukan sebagai tingkat harga
+   * yang bisa dipilih.
    */
   const tierTampil = useMemo(() => {
     const dariBackend = (barisHarga?.tier ?? []).map((t) => ({
@@ -181,12 +197,19 @@ export default function ProductDetailScreen() {
     const adaEcer = dariBackend.some((t) => t.min_qty <= 1);
     const ecer = hargaQty.hargaEcer;
 
-    const lengkap = adaEcer || ecer <= 0
-      ? dariBackend
-      : [{ nama_tier: "Ecer", harga: ecer, min_qty: 1, is_default: true }, ...dariBackend];
+    if (adaEcer || ecer <= 0) return [...dariBackend].sort((a, b) => a.min_qty - b.min_qty);
 
-    return [...lengkap].sort((a, b) => a.min_qty - b.min_qty);
-  }, [barisHarga, hargaQty.hargaEcer]);
+    // Produk yang hanya punya tier grosir: lengkapi dengan harga qty 1 —
+    // labelnya `Flash Sale` bila angka itu berasal dari promo.
+    const barisPertama = {
+      nama_tier: flashTampil ? NAMA_TIER_FLASH : "Ecer",
+      harga: ecer,
+      min_qty: 1,
+      is_default: !flashTampil,
+    };
+
+    return [barisPertama, ...dariBackend].sort((a, b) => a.min_qty - b.min_qty);
+  }, [barisHarga, hargaQty.hargaEcer, flashTampil]);
 
   /**
    * Rating & jumlah ulasan dibaca langsung dari endpoint publik lewat hook
@@ -197,16 +220,21 @@ export default function ProductDetailScreen() {
     idValid ? idProduk : null,
   );
 
-  /** Harga coret hanya bila backend memberi pembanding (varian termahal). */
+  /**
+   * Harga coret: acuan tertinggi antara harga master varian dan harga normal
+   * dari matriks (`harga_ecer_normal`), supaya saat flash/grosir aktif harga
+   * normal tampil sebagai pembanding yang sah (bukan badge diskon karangan).
+   */
   const hargaCoret = useMemo(() => {
-    if (!produk?.varian || produk.varian.length < 2) return null;
-    const termahal = Math.max(...produk.varian.map((v) => Number(v.harga_jual) || 0));
-    return termahal > hargaSatuan ? termahal : null;
-  }, [produk, hargaSatuan]);
+    const masterVarian = (produk?.varian ?? []).map((v) => Number(v.harga_jual) || 0);
+    const termahal = masterVarian.length > 0 ? Math.max(...masterVarian) : 0;
+
+    return Math.max(termahal, hargaQty.hargaNormal);
+  }, [produk, hargaQty.hargaNormal]);
 
   const diskon =
-    hargaCoret && hargaCoret > hargaSatuan
-      ? Math.round(((hargaCoret - hargaSatuan) / hargaCoret) * 100)
+    hargaCoret > hargaTampilQty
+      ? Math.round(((hargaCoret - hargaTampilQty) / hargaCoret) * 100)
       : 0;
 
   const gambarGaleri = useMemo(() => {
@@ -442,16 +470,22 @@ export default function ProductDetailScreen() {
               {rupiah(hargaTampilQty)}
             </Text>
             {/*
-              Harga coret: acuan tertinggi antara harga ecer varian dan harga
-              efektif qty ini, supaya saat grosir aktif harga ecer tampil
+              Harga coret: acuan tertinggi antara harga master varian dan harga
+              normal matriks, supaya saat grosir/flash aktif harga normal tampil
               sebagai pembanding yang sah (bukan badge diskon karangan).
             */}
-            {Math.max(hargaCoret ?? 0, hargaQty.hargaEcer) > hargaTampilQty ? (
+            {Math.max(hargaCoret, hargaQty.hargaEcer) > hargaTampilQty ? (
               <Text className="font-inter text-sm text-neutral-400 line-through tabular-nums">
-                {rupiah(Math.max(hargaCoret ?? 0, hargaQty.hargaEcer))}
+                {rupiah(Math.max(hargaCoret, hargaQty.hargaEcer))}
               </Text>
             ) : null}
-            {hargaQty.grosir ? (
+            {flashTampil ? (
+              <Badge
+                label={teks.judul.flashSale}
+                variant="danger"
+                accessibilityLabel={`Harga ${teks.judul.flashSale} berlaku untuk ${jumlah} item`}
+              />
+            ) : hargaQty.grosir ? (
               <Badge
                 label={hargaQty.namaTier}
                 variant="success"

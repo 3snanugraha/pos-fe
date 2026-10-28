@@ -43,7 +43,12 @@ export type BarisHargaSatuan = {
   nama_satuan: string;
   faktor: number | string;
   is_default_satuan?: boolean;
+  /** Harga yang DITAGIH untuk qty 1 — sudah termasuk harga flash bila aktif. */
   harga_ecer: number | string;
+  /** Harga ecer master (tanpa promo) — acuan harga coret. */
+  harga_ecer_normal?: number | string;
+  /** true bila harga flash aktif dan lebih murah dari harga ecer master. */
+  flash?: boolean;
   tier: GrosirTier[];
 };
 
@@ -58,6 +63,9 @@ export type HargaEfektif = {
   /** Tier termurah yang belum tercapai (untuk teks upsell). */
   berikut: { min_qty: number; harga: number; nama_tier: string } | null;
 };
+
+/** Label tier untuk harga flash (sama dengan `App\Support\HargaFlash::NAMA_TIER`). */
+export const NAMA_TIER_FLASH = "Flash Sale";
 
 const keAngka = (nilai: unknown): number => {
   const n = typeof nilai === "number" ? nilai : Number(String(nilai ?? "").replace(/[^\d.-]/g, ""));
@@ -110,7 +118,9 @@ export function hargaEfektif(
       )[0] ?? null;
 
   if (tercapai.length === 0) {
-    return { harga: hargaEcer, hargaEcer, namaTier: "Ecer", grosir: false, berikut };
+    const label = labelFlash(tier, jumlah, hargaEcer);
+
+    return { harga: hargaEcer, hargaEcer, namaTier: label ?? "Ecer", grosir: false, berikut };
   }
 
   const dipakai = tercapai[0];
@@ -122,6 +132,32 @@ export function hargaEfektif(
     grosir: true,
     berikut,
   };
+}
+
+/**
+ * Label `Flash Sale` untuk harga ecer — hanya bila backend MEMANG mengirim
+ * baris tier berlabel itu dan angkanya sama dengan harga yang dipakai.
+ *
+ * K1 membuat harga ecer yang ditagih bisa berasal dari promo. Tanpa label ini
+ * keranjang menulis "Ecer" di sebelah angka harga flash (Rp 720.000 dengan
+ * label "Ecer" padahal harga ecer master 750.000) — angka benar, keterangan
+ * menyesatkan. Fungsi ini tidak mengarang label: barisnya harus ada di tier.
+ */
+function labelFlash(
+  tier: GrosirTier[] | undefined | null,
+  qty: number,
+  harga: number,
+): string | null {
+  if (!Array.isArray(tier) || harga <= 0) return null;
+
+  const baris = tier.find(
+    (t) =>
+      String(t.nama_tier ?? "") === NAMA_TIER_FLASH
+      && keAngka(t.min_qty) <= qty
+      && keAngka(t.harga) === harga,
+  );
+
+  return baris ? NAMA_TIER_FLASH : null;
 }
 
 /** Ringkasan grosir dari field `grosir` (kartu produk). */
@@ -143,6 +179,63 @@ export function tierDariRingkas(
       is_default: false,
     },
   ];
+}
+
+/**
+ * Harga efektif untuk satu BARIS matriks harga API (`harga_jual_satuan`).
+ *
+ * Sejak keputusan K1, baris itu sudah membawa harga efektif: `harga_ecer`
+ * adalah harga yang benar-benar ditagih untuk qty 1 (harga flash bila promo
+ * aktif), `harga_ecer_normal` harga master untuk harga coret, dan baris tier
+ * yang lebih mahal dari flash sudah diganti label `Flash Sale`. Fungsi ini
+ * menyatukan pembacaan itu supaya layar detail tidak menebak sendiri:
+ *
+ *  - ecer acuan `hargaEfektif()` = `harga_ecer` (efektif), sehingga qty 1 di
+ *    layar sama dengan tagihan checkout;
+ *  - `hargaNormal` hanya untuk teks coret/badge diskon, tidak pernah dipakai
+ *    sebagai harga tagihan.
+ *
+ * Produk legacy tanpa matriks (atau payload lama yang belum punya field baru)
+ * jatuh ke `ecerCadangan` / `flashCadangan` tanpa mengarang angka.
+ */
+export function hargaEfektifBaris(
+  baris: BarisHargaSatuan | null | undefined,
+  qty: number,
+  ecerCadangan: number,
+  flashCadangan?: number | null,
+): HargaEfektif & { hargaNormal: number; flash: boolean } {
+  const ecerMaster = keAngka(baris?.harga_ecer_normal ?? ecerCadangan);
+
+  const flashDariBaris = Boolean(baris?.flash);
+  const flashCadanganAngka = keAngka(flashCadangan ?? 0);
+  const flashAktif = flashDariBaris
+    || (flashCadanganAngka > 0 && ecerMaster > 0 && flashCadanganAngka < ecerMaster);
+
+  // Acuan ecer untuk hargaEfektif().
+  //
+  // Kontrak BARU: `harga_ecer` sudah harga efektif → dipakai apa adanya.
+  // Payload LAMA (APK terpasang, belum menerima field baru): `harga_ecer` masih
+  // harga MASTER. Karena itu harga flash dari field produk dipakai bila lebih
+  // murah, sehingga layar tidak kembali menampilkan harga ecer saat promo.
+  const ecerApi = keAngka(baris?.harga_ecer ?? 0);
+  const ecerKandidat = ecerApi > 0 ? ecerApi : ecerMaster;
+  const ecerEfektif = flashAktif && flashCadanganAngka > 0 && flashCadanganAngka < ecerKandidat
+    ? flashCadanganAngka
+    : ecerKandidat;
+
+  const hasil = hargaEfektif(baris?.tier ?? [], qty, ecerEfektif);
+
+  // Bila harga yang dipakai memang harga promo (bukan tier grosir), labelnya
+  // `Flash Sale` supaya keranjang/ringkasan menyebut KENAPA harganya turun.
+  const pakaiFlash = flashAktif && !hasil.grosir && ecerMaster > hasil.harga;
+
+  return {
+    ...hasil,
+    namaTier: pakaiFlash ? NAMA_TIER_FLASH : hasil.namaTier,
+    // Coret hanya punya arti bila harga master memang lebih tinggi.
+    hargaNormal: ecerMaster,
+    flash: pakaiFlash,
+  };
 }
 
 /** Baris matriks harga untuk satu varian (detail produk). */
