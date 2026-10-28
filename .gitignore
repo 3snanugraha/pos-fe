@@ -48,3 +48,6 @@ build-output/
 # Verifikasi web export (lokal, tidak di-commit)
 dist-web-verify/
 dist-web-after/
+dist-web-28b/
+dist-web-28c/
+_scratch/

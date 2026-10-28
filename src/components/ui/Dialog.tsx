@@ -1,16 +1,8 @@
 import { useEffect, useId, useState } from "react";
-import {
-  Animated,
-  Easing,
-  Modal,
-  Pressable,
-  Text,
-  View,
-  useWindowDimensions,
-  type ModalProps,
-} from "react-native";
+import { Modal, Pressable, Text, View, useWindowDimensions, type ModalProps } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { antreanModal } from "../../lib/dialogAntrean";
+import { rencanaRenderDialog } from "../../lib/dialogTampil";
 import { useReduceMotion } from "../../lib/motion";
 import { colors, overlay, shadowStyle } from "../../theme/tokens";
 
@@ -27,8 +19,13 @@ export type DialogProps = {
   actions?: React.ReactNode;
   /** Tutup dialog saat overlay ditekan (default true). */
   dismissOnBackdrop?: boolean;
-  /** Nonaktifkan animasi untuk Reduce Motion. */
+  /** Paksa matikan animasi jendela. Bila kosong, ikut setelan "Kurangi gerakan" perangkat. */
   reduceMotion?: boolean;
+  /**
+   * Animasi jendela bawaan `<Modal>`. Default "fade" — atau "none" bila
+   * Reduce Motion aktif. Animasi TIDAK boleh dipasang manual pada kartu
+   * dialog (lihat catatan di bawah).
+   */
   animationType?: ModalProps["animationType"];
   testID?: string;
 };
@@ -36,8 +33,28 @@ export type DialogProps = {
 /**
  * Dialog Zovora — guideline §3.17 + §2.6.
  * Overlay neutral-900 50%, kartu putih radius xl (16), lebar layar - 48,
- * padding 20, shadow-modal; animasi fade + scale 0,95 → 1 selama 200 ms.
+ * padding 20, shadow-modal.
  * Fokus dijebak lewat `accessibilityViewIsModal` (guideline §7).
+ *
+ * ── Kenapa konten TIDAK dianimasikan manual (perbaikan APK 2026-10-28c) ──
+ *
+ * Versi 2026-10-28b membungkus kartu dialog dengan `Animated.View` ber-
+ * `opacity` yang dimulai dari 0 lalu dianimasikan ke 1 memakai native driver.
+ * Di Android nilai itu dikirim ke view lewat jalur native animated
+ * (`PropsAnimatedNode.updateView` → `synchronouslyUpdateViewOnUIThread`) pada
+ * frame-frame pertama setelah jendela `Dialog` dibuat. Bila pembaruan itu
+ * tidak sampai, opacity tetap 0 — PERMANEN, karena `Animated.Value` tidak
+ * memicu render ulang React sehingga tidak ada yang memperbaikinya. Gejalanya
+ * persis laporan uji perangkat: overlay/backdrop tampil (View biasa, tanpa
+ * animasi) tetapi kartu dialog tidak muncul sama sekali.
+ *
+ * Aturan yang sekarang dipegang: **konten dialog atomis dengan `visible`.**
+ * Bila `<Modal>` dirender, kartu dan isinya ikut dirender — tanpa gate
+ * opacity, timer, atau animasi manual apa pun. Animasi masuk/keluar
+ * diserahkan ke `animationType` milik `<Modal>` (di Android memakai animasi
+ * jendela native `catalyst_fade_in/out`), yang bekerja pada level jendela,
+ * bukan pada opacity view di dalamnya, sehingga tidak bisa membuat konten
+ * tak terlihat secara permanen.
  *
  * ── Kenapa lewat `antreanModal` (perbaikan APK 2026-10-28b) ─────────────
  *
@@ -45,22 +62,16 @@ export type DialogProps = {
  * (`ReactModalHostView` membuat `ComponentDialog` lalu memanggil `show()`).
  * Bila satu layar memuat dua `<Modal>` sekaligus, atau satu ditutup sementara
  * yang lain dibuka pada commit yang SAMA, `WindowManager` bisa menempatkan
- * jendela baru di belakang / menolak menampilkannya. Gejala di perangkat:
- * dialog "tidak muncul" walau state `visible` sudah true; menekan BACK
- * menutup jendela hantu itu, lalu pemicu berikutnya berhasil.
+ * jendela baru di belakang / menolak menampilkannya. Karena itu setiap
+ * instance mendaftar ke `antreanModal`: satu slot global, promosi ditunda
+ * satu tick, sehingga hanya ada satu jendela native pada satu waktu.
  *
- * Aplikasi ini memicu pola tersebut secara rutin — hampir setiap layar punya
- * dua `<Dialog>` bersaudara (konfirmasi + pesan), beberapa alur menutup satu
- * dialog lalu membuka dialog lain pada commit yang sama (gagal hapus → pesan
- * galat), dan `Stepper` menaruh `<Dialog>` di dalam setiap baris keranjang.
- *
- * Karena itu dialog TIDAK merender `<Modal>` sendiri-sendiri. Setiap instance
- * mendaftar ke `antreanModal` (satu slot global; promosi ditunda satu tick)
- * sehingga hanya ada satu jendela native pada satu waktu dan pergantian
- * dialog tidak pernah terjadi dalam satu commit.
- *
- * Semua perilaku lain (animasi, overlay, focus trap, dismiss, tombol back)
- * dipertahankan.
+ * Catatan: serialisasi ini TIDAK memakai `onDismiss`, karena React Native
+ * hanya mengimplementasikan `onDismiss` di iOS — lihat
+ * `ReactModalHostManager.kt` (`topDismiss` ditandai "iOS only") dan
+ * `Libraries/Modal/Modal.js` (`if (Platform.OS === 'ios')`). Di Android tidak
+ * ada event "jendela sudah benar-benar ditutup", jadi jeda satu tick setelah
+ * commit pelepasan adalah sinyal termurah yang tersedia.
  */
 export function Dialog({
   visible,
@@ -72,17 +83,17 @@ export function Dialog({
   actions,
   dismissOnBackdrop = true,
   reduceMotion,
-  animationType = "fade",
+  animationType,
   testID,
 }: DialogProps) {
   const { width } = useWindowDimensions();
   const insets = useSafeAreaInsets();
-  // Animated.Value di state (bukan ref) agar aman dibaca saat render.
-  const [progress] = useState(() => new Animated.Value(0));
   const id = useId();
   /**
    * Boleh merender `<Modal>` sekarang? Ditentukan antrean, bukan `visible`
    * saja: `visible` = niat tampil, `memegangSlot` = jendela native tersedia.
+   * Keduanya digabung `rencanaRenderDialog` menjadi SATU keputusan sehingga
+   * modal dan konten tidak pernah diputuskan terpisah.
    */
   const [memegangSlot, setMemegangSlot] = useState(false);
   const kurangiGerak = useReduceMotion();
@@ -112,23 +123,21 @@ export function Dialog({
     return antreanModal.langgan(perbarui);
   }, [id, visible]);
 
-  useEffect(() => {
-    if (visible && memegangSlot) {
-      progress.setValue(tanpaAnimasi ? 1 : 0);
-      if (tanpaAnimasi) return;
-      Animated.timing(progress, {
-        toValue: 1,
-        duration: 200,
-        easing: Easing.out(Easing.ease),
-        useNativeDriver: true,
-      }).start();
-      return;
-    }
+  /**
+   * Animasi jendela dipilih langsung (tanpa state/effect) supaya tidak ada
+   * setState di dalam effect dan tidak ada render tambahan.
+   *
+   * Catatan Android: mengganti `animationType` pada jendela yang SEDANG tampil
+   * memaksa `ReactModalHostView` membuat ulang `Dialog`
+   * (`createNewDialog = true`). Itu tidak berbahaya di sini karena
+   * `useReduceMotion` membaca setelan perangkat sekali saat layar dipasang
+   * (jauh sebelum dialog dibuka), dan pergantian "fade" ↔ "none" tidak
+   * menyentuh opacity konten — konten tetap dirender.
+   */
+  const animasi: ModalProps["animationType"] =
+    animationType ?? (tanpaAnimasi ? "none" : "fade");
 
-    progress.setValue(0);
-  }, [visible, memegangSlot, tanpaAnimasi, progress]);
-
-  const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] });
+  const rencana = rencanaRenderDialog(visible, memegangSlot);
 
   /*
    * Dialog yang sudah ditutup TIDAK boleh tetap ada di pohon DOM.
@@ -136,18 +145,17 @@ export function Dialog({
    * `Modal` react-native-web hanya menyembunyikan isinya (opacity 0) saat
    * `visible=false`, sehingga tombol "Batal"/"Hapus" tetap bisa difokus
    * keyboard dan tetap diumumkan pembaca layar — pengguna bisa menekan "Hapus"
-   * pada dialog yang tidak terlihat. Karena itu isi dialog di-unmount total;
-   * animasi masuk tetap berjalan lewat `animationType` milik Modal.
+   * pada dialog yang tidak terlihat. Karena itu isi dialog di-unmount total.
    */
-  if (!visible || !memegangSlot) {
+  if (!rencana.modal) {
     return null;
   }
 
   return (
     <Modal
-      visible={visible}
+      visible
       transparent
-      animationType={animationType}
+      animationType={animasi}
       onRequestClose={onClose}
       statusBarTranslucent
       testID={testID}
@@ -168,22 +176,15 @@ export function Dialog({
           accessibilityRole="button"
           accessibilityLabel="Tutup dialog"
         />
-        <Animated.View
-          style={[
-            {
-              width: Math.min(width - 48, 360),
-              opacity: progress,
-              transform: [{ scale }],
-            },
-            shadowStyle("modal"),
-          ]}
-        >
-          {/* Kelas NativeWind dipasang di View biasa: Animated.View tidak
-              meneruskan className ke gaya di react-native-web. */}
+        {/* Kartu dialog: View biasa, TANPA opacity/animasi manual. `className`
+            dipasang di sini (bukan di lapisan bergaya animasi) supaya gaya
+            NativeWind benar-benar diterapkan juga di react-native-web. */}
+        <View style={[{ width: Math.min(width - 48, 360) }, shadowStyle("modal")]}>
           <View
             accessibilityViewIsModal
             accessibilityRole="alert"
             className="rounded-xl bg-white p-5"
+            testID={testID ? `${testID}-kartu` : undefined}
           >
             <View className="items-center gap-2">
               {icon ? <View className="items-center">{icon}</View> : null}
@@ -206,7 +207,7 @@ export function Dialog({
               </View>
             ) : null}
           </View>
-        </Animated.View>
+        </View>
       </View>
     </Modal>
   );
