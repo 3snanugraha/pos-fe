@@ -369,6 +369,10 @@ export const teks = {
     varian: "Varian {nama}",
     memuatAlamat: "Memuat alamat…",
     ringkasanHarga: "Ringkasan Harga",
+    /** Qty manual (ketik angka) — pesan validasi & hint. */
+    qtyMelebihiStok: "Maksimal {maks} item sesuai stok.",
+    qtyMinimal: "Minimal {min} item.",
+    qtyKetikHint: "Ketik jumlah, maksimal {maks} sesuai stok.",
   },
 
   /** Pesanan berhasil (W4). */

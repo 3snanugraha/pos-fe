@@ -138,6 +138,15 @@ export function CartItemRow({
               disabled={disabled}
               onChange={(next) => onChangeJumlah?.(next)}
               onRemove={onHapus}
+              /*
+               * `onRemove` di sini membuka dialog konfirmasi MILIK LAYAR
+               * (satu `Dialog` di keranjang, dipakai bersama tombol trash).
+               * Tanpa ini `Stepper` menampilkan dialognya SENDIRI lebih dulu,
+               * lalu dialog layar muncul setelahnya: pengguna mengonfirmasi
+               * dua kali, dan dua jendela modal bertukar dalam satu alur —
+               * pola yang memicu bug "dialog tidak muncul" di Android.
+               */
+              confirmRemove={false}
             />
           )}
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import {
   Animated,
   Easing,
@@ -10,6 +10,8 @@ import {
   type ModalProps,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { antreanModal } from "../../lib/dialogAntrean";
+import { useReduceMotion } from "../../lib/motion";
 import { colors, overlay, shadowStyle } from "../../theme/tokens";
 
 export type DialogProps = {
@@ -36,6 +38,29 @@ export type DialogProps = {
  * Overlay neutral-900 50%, kartu putih radius xl (16), lebar layar - 48,
  * padding 20, shadow-modal; animasi fade + scale 0,95 → 1 selama 200 ms.
  * Fokus dijebak lewat `accessibilityViewIsModal` (guideline §7).
+ *
+ * ── Kenapa lewat `antreanModal` (perbaikan APK 2026-10-28b) ─────────────
+ *
+ * Di Android satu `<Modal>` = satu **jendela `Dialog` Android**
+ * (`ReactModalHostView` membuat `ComponentDialog` lalu memanggil `show()`).
+ * Bila satu layar memuat dua `<Modal>` sekaligus, atau satu ditutup sementara
+ * yang lain dibuka pada commit yang SAMA, `WindowManager` bisa menempatkan
+ * jendela baru di belakang / menolak menampilkannya. Gejala di perangkat:
+ * dialog "tidak muncul" walau state `visible` sudah true; menekan BACK
+ * menutup jendela hantu itu, lalu pemicu berikutnya berhasil.
+ *
+ * Aplikasi ini memicu pola tersebut secara rutin — hampir setiap layar punya
+ * dua `<Dialog>` bersaudara (konfirmasi + pesan), beberapa alur menutup satu
+ * dialog lalu membuka dialog lain pada commit yang sama (gagal hapus → pesan
+ * galat), dan `Stepper` menaruh `<Dialog>` di dalam setiap baris keranjang.
+ *
+ * Karena itu dialog TIDAK merender `<Modal>` sendiri-sendiri. Setiap instance
+ * mendaftar ke `antreanModal` (satu slot global; promosi ditunda satu tick)
+ * sehingga hanya ada satu jendela native pada satu waktu dan pergantian
+ * dialog tidak pernah terjadi dalam satu commit.
+ *
+ * Semua perilaku lain (animasi, overlay, focus trap, dismiss, tombol back)
+ * dipertahankan.
  */
 export function Dialog({
   visible,
@@ -46,7 +71,7 @@ export function Dialog({
   children,
   actions,
   dismissOnBackdrop = true,
-  reduceMotion = false,
+  reduceMotion,
   animationType = "fade",
   testID,
 }: DialogProps) {
@@ -54,21 +79,54 @@ export function Dialog({
   const insets = useSafeAreaInsets();
   // Animated.Value di state (bukan ref) agar aman dibaca saat render.
   const [progress] = useState(() => new Animated.Value(0));
+  const id = useId();
+  /**
+   * Boleh merender `<Modal>` sekarang? Ditentukan antrean, bukan `visible`
+   * saja: `visible` = niat tampil, `memegangSlot` = jendela native tersedia.
+   */
+  const [memegangSlot, setMemegangSlot] = useState(false);
+  const kurangiGerak = useReduceMotion();
+  const tanpaAnimasi = reduceMotion ?? kurangiGerak;
+
+  // Minta/lepas slot mengikuti `visible`. `lepas` inilah yang mempromosikan
+  // dialog berikutnya (satu tick kemudian) saat dialog ini ditutup.
+  useEffect(() => {
+    if (!visible) {
+      antreanModal.lepas(id);
+      return undefined;
+    }
+
+    antreanModal.minta(id);
+
+    return () => {
+      antreanModal.lepas(id);
+    };
+  }, [id, visible]);
+
+  // Ikuti keputusan antrean. State lokal dipakai agar React tahu kapan harus
+  // melepas/membuat `<Modal>` — membaca `antreanModal` saat render tidak
+  // memicu render ulang, jadi dialog bisa "tidak pernah muncul".
+  useEffect(() => {
+    const perbarui = () => setMemegangSlot(visible && antreanModal.boleh(id));
+    perbarui();
+    return antreanModal.langgan(perbarui);
+  }, [id, visible]);
 
   useEffect(() => {
-    if (visible) {
-      progress.setValue(reduceMotion ? 1 : 0);
-      if (reduceMotion) return;
+    if (visible && memegangSlot) {
+      progress.setValue(tanpaAnimasi ? 1 : 0);
+      if (tanpaAnimasi) return;
       Animated.timing(progress, {
         toValue: 1,
         duration: 200,
         easing: Easing.out(Easing.ease),
         useNativeDriver: true,
       }).start();
-    } else {
-      progress.setValue(0);
+      return;
     }
-  }, [visible, reduceMotion, progress]);
+
+    progress.setValue(0);
+  }, [visible, memegangSlot, tanpaAnimasi, progress]);
 
   const scale = progress.interpolate({ inputRange: [0, 1], outputRange: [0.95, 1] });
 
@@ -81,7 +139,7 @@ export function Dialog({
    * pada dialog yang tidak terlihat. Karena itu isi dialog di-unmount total;
    * animasi masuk tetap berjalan lewat `animationType` milik Modal.
    */
-  if (!visible) {
+  if (!visible || !memegangSlot) {
     return null;
   }
 

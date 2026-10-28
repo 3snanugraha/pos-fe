@@ -44,3 +44,7 @@ app-example
 # artefak lokal (log uji, mock, APK hasil build)
 .tmp-w*/
 build-output/
+
+# Verifikasi web export (lokal, tidak di-commit)
+dist-web-verify/
+dist-web-after/
