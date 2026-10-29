@@ -436,6 +436,11 @@ export default function KasirOrdersScreen() {
               : (order.transaction.status_pembayaran ?? null),
             alamat_pengiriman: order.alamat ?? null,
             catatan: order.catatan ?? null,
+            // Kolom pembayaran ikut dikirim: struk memakai angka ini bila
+            // terisi, dan jatuh ke penanda `[Tunai: …]` di catatan hanya untuk
+            // order lama (lihat `bacaPembayaran` di utils/strukThermal.ts).
+            jumlah_dibayar: order.transaction.jumlah_dibayar ?? null,
+            kembalian: order.transaction.kembalian ?? null,
             subtotal: Number(order.transaction.subtotal ?? 0) || order.total,
             total_diskon: Number(order.transaction.total_diskon ?? 0) || 0,
             total_bayar: order.total,

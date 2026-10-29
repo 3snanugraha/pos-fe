@@ -401,11 +401,15 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
         : notes.trim() || undefined;
 
       /**
-       * Uang tunai & kembalian ikut ditulis ke catatan order: backend
-       * (`CustomerOrderController@store`) hanya menerima `metode_pembayaran_id`
-       * + `catatan`, dan `jumlah_dibayar`/`kembalian` diisi 0 sampai kasir
-       * memverifikasi. Penanda `[Tunai: diterima …; kembali …]` membuat kasir
-       * dan struk pelanggan membaca angka yang sama tanpa mengubah kontrak API.
+       * Uang tunai & kembalian ditulis DUA kali dengan sengaja:
+       *
+       * 1. Field eksplisit `uang_diterima` / `kembalian` — server baru
+       *    menyimpannya ke kolom transaksi, sehingga struk, kas harian, dan
+       *    laporan tidak lagi melihat kembalian 0.
+       * 2. Penanda `[Tunai: …]` di catatan — KONTRAK API LAMA tetap hidup:
+       *    server versi lama (APK terpasang di perangkat) mengabaikan field
+       *    baru dan hanya membaca catatan; pembaca struk juga memakai penanda
+       *    sebagai cadangan bila kolomnya masih 0 (data lama).
        */
       const catatanAkhir = gabungCatatanTunai(
         catatanSplit,
@@ -413,6 +417,8 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
           ? { diterima: uangTunaiNominal, kembalian: hasilTunai.kembalian }
           : null
       );
+
+      const pakaiTunai = tunaiAktif && uangTunaiNominal > 0;
 
       const payload = {
         items: items.map((item) => ({
@@ -430,6 +436,10 @@ export function CheckoutProvider({ children }: { children: ReactNode }) {
         catatan: catatanAkhir,
         promo_code: promoCode.trim() || undefined,
         poin_digunakan: poinValue.dipakai,
+        // Aditif (klien/server lama mengabaikannya). Kembalian TIDAK dikirim:
+        // server menghitungnya sendiri dari tagihan yang berwenang, karena
+        // total di layar bisa berubah oleh promo/poin.
+        uang_diterima: pakaiTunai ? uangTunaiNominal : undefined,
       };
 
       let result;

@@ -71,6 +71,26 @@ export type DataStrukThermal = {
     status_pembayaran?: string | null;
     alamat_pengiriman?: string | null;
     catatan?: string | null;
+    /**
+     * Uang tunai yang disepakati saat checkout. Order online tidak punya
+     * kolom pembayaran di API lama, jadi angkanya dulu hanya hidup di dalam
+     * teks `catatan` (`[Tunai: diterima …; kembali …]`) dan ikut tercetak di
+     * baris Catatan — keluhan pemilik. Angka itu kini dicetak di blok
+     * pembayaran (Uang diterima / Kembali).
+     *
+     * Boleh tidak diisi: `susunBarisStruk` membacanya sendiri dari `catatan`
+     * (lihat `bacaPembayaran`), sehingga data lama tetap benar.
+     */
+    tunai?: { diterima: number; kembalian: number } | null;
+    /** Rincian split payment (`[Split: …]`), dicetak sebagai baris pembayaran. */
+    rincian_split?: string | null;
+    /**
+     * Nominal pembayaran dari kolom transaksi. Diisi server sejak checkout &
+     * verifikasi memperbaiki pencatatannya; order LAMA masih 0 dan diisi dari
+     * penanda `[Tunai: …]` di catatan.
+     */
+    jumlah_dibayar?: number | null;
+    kembalian?: number | null;
     subtotal?: number;
     total_diskon?: number;
     total_bayar: number;
@@ -161,11 +181,168 @@ export function labelItemThermal(item: ItemStrukThermal): string {
 }
 
 /**
+ * Pecah rincian split ("Tunai Rp 100.000; Transfer BCA Rp 175.000") menjadi
+ * pasangan label/nominal untuk dicetak.
+ *
+ * Rincian ditulis klien (`utils/payment.ts` → `buildCatatanWithSplit`) sebagai
+ * `nama_metode nominal`; format itulah yang diparse. Bagian tanpa nominal
+ * tetap dicetak apa adanya di sisi kiri dengan nilai kosong — lebih baik
+ * kelihatan daripada hilang.
+ */
+export function pecahRincianSplit(
+  rincian?: string | null
+): { kiri: string; kanan: string }[] {
+  const teks = (rincian ?? "").trim();
+  if (teks === "") return [];
+
+  return teks
+    .split(";")
+    .map((bagian) => bagian.trim())
+    .filter((bagian) => bagian !== "")
+    .map((bagian) => {
+      // Nominal di ujung kanan: "Transfer BCA Rp 175.000" → label + nilai.
+      const cocok = bagian.match(/^(.*?)\s*(Rp\.?\s*[0-9][0-9.]*)$/i);
+
+      if (!cocok) return { kiri: bagian, kanan: "" };
+
+      return { kiri: cocok[1].trim() || bagian, kanan: cocok[2].replace(/\s+/g, " ") };
+    });
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * Pembaca penanda pembayaran pada `catatan` order
+ * ---------------------------------------------------------------------------
+ *
+ * KENAPA DI SINI: kontrak `POST /api/customer/orders` tidak punya kolom
+ * pembayaran, jadi checkout menulis uang tunai & rincian split ke catatan:
+ *
+ *     Antar sore [Tunai: diterima Rp 100.000; kembali Rp 33.000]
+ *     [Split: Tunai Rp 100.000; Transfer BCA Rp 175.000]
+ *
+ * Struk dulu mencetak catatan apa adanya → baris "Catatan" berisi info
+ * pembayaran milik kasir (keluhan pemilik). Penanda mesin itu kini dibuang
+ * dari Catatan lalu dicetak sebagai baris pembayaran.
+ *
+ * Penanda BERMAKNA — `[Ditolak kasir: …]` (`OnlineOrderController@reject`) dan
+ * `[Dibatalkan pelanggan]` (`Api\CustomerOrderController@cancel`) — adalah
+ * pesan untuk pembaca dan WAJIB tetap tercetak; pola di bawah sengaja tidak
+ * menyentuhnya.
+ *
+ * Logika ini SENGAJA tinggal di modul bebas dependensi ini (bukan diimpor dari
+ * `utils/tunai.ts`/`utils/payment.ts`): `node --test` tidak bisa me-resolve
+ * import tanpa ekstensi, sedangkan modul produk memakai gaya tanpa ekstensi
+ * yang dipahami Metro. Padanan PHP-nya
+ * `App\Support\PenandaPembayaran` (dipakai struk web & ESC/POS server).
+ */
+
+const POLA_TUNAI = /\[Tunai:\s*diterima\s*([^;\]]+)(?:;\s*kembali\s*([^\]]+))?\]/i;
+const POLA_SPLIT = /\[Split:\s*([^\]]+)\]/i;
+
+/** Ambil angka dari teks bebas ("Rp. 33.000" → 33000). */
+export const angkaPenanda = (teks?: string | null): number => {
+  if (!teks) return 0;
+  const digit = String(teks).replace(/[^0-9]/g, "");
+  if (digit === "") return 0;
+  const nilai = parseInt(digit, 10);
+  return Number.isFinite(nilai) ? nilai : 0;
+};
+
+/** Uang tunai dari catatan order (null bila tidak ada penanda / nominal 0). */
+export function bacaTunaiCatatan(
+  catatan?: string | null
+): { diterima: number; kembalian: number } | null {
+  if (!catatan || catatan.trim() === "") return null;
+  const cocok = catatan.match(POLA_TUNAI);
+  if (!cocok) return null;
+
+  const diterima = angkaPenanda(cocok[1]);
+  if (diterima <= 0) return null;
+
+  return { diterima, kembalian: angkaPenanda(cocok[2] ?? "") };
+}
+
+/** Rincian split dari catatan (null bila tidak ada). */
+export function bacaRincianSplit(catatan?: string | null): string | null {
+  if (!catatan || catatan.trim() === "") return null;
+  const cocok = catatan.match(POLA_SPLIT);
+  const rincian = (cocok?.[1] ?? "").trim();
+  return rincian === "" ? null : rincian;
+}
+
+/**
+ * Catatan yang layak dibaca manusia: penanda tunai & split dibuang, penanda
+ * bermakna (ditolak kasir / dibatalkan pelanggan) dipertahankan.
+ */
+export function catatanStrukBersih(catatan?: string | null): string {
+  if (!catatan) return "";
+  return catatan
+    .replace(new RegExp(POLA_TUNAI.source, "gi"), "")
+    .replace(new RegExp(POLA_SPLIT.source, "gi"), "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
+
+/**
+ * Seluruh data pembayaran + catatan bersih untuk struk.
+ *
+ * Aturan sumber angka (sama dengan `PenandaPembayaran::untukStruk()` di
+ * pos-be): kolom transaksi menang bila terisi (> 0); penanda `[Tunai: …]`
+ * hanya cadangan untuk order lama. Karena itu struk order lama bisa benar
+ * TANPA mengubah DB, dan struk APK & web mencetak angka yang identik.
+ */
+export function bacaPembayaran(order: {
+  catatan?: string | null;
+  jumlah_dibayar?: number | null;
+  kembalian?: number | null;
+  tunai?: { diterima: number; kembalian: number } | null;
+  rincian_split?: string | null;
+}): {
+  tunai: { diterima: number; kembalian: number } | null;
+  rincian_split: string | null;
+  catatan: string;
+} {
+  const penanda = bacaTunaiCatatan(order.catatan);
+
+  // Nominal eksplisit dari pemanggil (`order.tunai`) dianggap sama kuatnya
+  // dengan kolom: keduanya berasal dari data server, bukan tebakan.
+  const diterimaEksplisit = Number(order.tunai?.diterima ?? 0) || 0;
+  const kembaliEksplisit = Number(order.tunai?.kembalian ?? 0) || 0;
+  const diterimaKolom = Number(order.jumlah_dibayar ?? 0) || 0;
+  const kembaliKolom = Number(order.kembalian ?? 0) || 0;
+
+  const diterima =
+    diterimaEksplisit > 0 ? diterimaEksplisit : diterimaKolom > 0 ? diterimaKolom : penanda?.diterima ?? 0;
+  const kembalian = Math.max(
+    0,
+    kembaliEksplisit > 0
+      ? kembaliEksplisit
+      : kembaliKolom > 0
+        ? kembaliKolom
+        : penanda?.kembalian ?? 0
+  );
+
+  return {
+    tunai: diterima > 0 ? { diterima, kembalian } : null,
+    rincian_split: order.rincian_split ?? bacaRincianSplit(order.catatan),
+    catatan: catatanStrukBersih(order.catatan),
+  };
+}
+
+/**
  * Susun struk sebagai daftar baris terstruktur (dipakai tes dan oleh
  * pembangun ESC/POS maupun HTML). Lebar baris maksimum `KOLOM_58`.
  */
 export function susunBarisStruk(data: DataStrukThermal): BarisStruk[] {
   const { toko, order } = data;
+
+  /**
+   * Pembayaran & catatan dihitung DARI DATA ORDER, bukan dari field yang
+   * sudah disiapkan pemanggil: struk lama/klien lama yang hanya punya
+   * `catatan` mentah tetap mencetak baris pembayaran yang benar. Bentuk data
+   * dari `dataStrukKasir.ts` hanya memperkaya, bukan syarat.
+   */
+  const bayar = bacaPembayaran(order);
   const baris: BarisStruk[] = [];
   const pemisah = "-".repeat(KOLOM_58);
 
@@ -247,6 +424,44 @@ export function susunBarisStruk(data: DataStrukThermal): BarisStruk[] {
     }
   }
 
+  /**
+   * Blok pembayaran — dulu angka tunai hanya hidup di dalam teks `catatan`
+   * (`[Tunai: diterima Rp 100.000; kembali Rp 33.000]`) lalu tercetak di baris
+   * Catatan. Pemilik mengeluh struk ORD mencetak
+   * "Catatan: [Tunai: diterima …]" alih-alih baris pembayaran seperti struk
+   * kasir. Sekarang angkanya diterima sebagai DATA (`order.tunai`,
+   * `order.rincian_split`) dan dicetak di sini, tepat di bawah TOTAL.
+   *
+   * Nominal memakai `barisKiriKanan` (bukan `padStart`): label panjang
+   * dibungkus dan nominal turun ke baris berikutnya rata kanan, sehingga
+   * angka tidak pernah terpotong di kertas 32 kolom.
+   */
+  const tunaiDiterima = Number(bayar.tunai?.diterima) || 0;
+  const tunaiKembalian = Math.max(0, Number(bayar.tunai?.kembalian) || 0);
+
+  if (tunaiDiterima > 0) {
+    for (const potong of barisKiriKanan("Uang diterima", rupiahThermal(tunaiDiterima))) {
+      baris.push({ teks: potong });
+    }
+  }
+
+  if (tunaiKembalian > 0) {
+    for (const potong of barisKiriKanan("Kembali", rupiahThermal(tunaiKembalian))) {
+      baris.push({ teks: potong });
+    }
+  }
+
+  /**
+   * Rincian split (`[Split: Tunai Rp 100.000; Transfer BCA Rp 175.000]`).
+   * Satu baris per metode supaya kasir bisa mencocokkan uang yang diterima
+   * tanpa membaca kalimat penanda mentah.
+   */
+  for (const bagian of pecahRincianSplit(bayar.rincian_split)) {
+    for (const potong of barisKiriKanan(bagian.kiri, bagian.kanan)) {
+      baris.push({ teks: potong });
+    }
+  }
+
   if (order.status_pembayaran) {
     baris.push({
       teks: `Status   : ${String(order.status_pembayaran).replace(/_/g, " ").toUpperCase()}`,
@@ -261,10 +476,18 @@ export function susunBarisStruk(data: DataStrukThermal): BarisStruk[] {
     }
   }
 
-  if (order.catatan) {
+  /**
+   * Catatan pelanggan: label "Catatan :" berdiri sendiri, isi di baris
+   * berikutnya. Format lama menempelkan label + isi ("Catatan: panjang…")
+   * sehingga penanda pembayaran yang dulu ikut tersimpan di catatan tampak
+   * seperti bagian dari pesan pelanggan.
+   */
+  const catatanBersih = bayar.catatan;
+  if (catatanBersih !== "") {
     baris.push({ teks: pemisah });
+    baris.push({ teks: "Catatan :" });
 
-    for (const potong of bungkusTeks(`Catatan: ${order.catatan}`)) {
+    for (const potong of bungkusTeks(catatanBersih)) {
       baris.push({ teks: potong });
     }
   }

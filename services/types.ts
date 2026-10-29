@@ -373,6 +373,13 @@ export interface OrderCreateData {
   catatan?: string;
   promo_code?: string;
   poin_digunakan?: number;
+  /**
+   * Uang tunai yang diserahkan pelanggan (opsional, aditif). Server baru
+   * menyimpannya ke kolom `jumlah_dibayar` dan menghitung `kembalian` sendiri;
+   * server lama mengabaikannya karena angkanya juga ada di penanda
+   * `[Tunai: …]` pada `catatan`.
+   */
+  uang_diterima?: number;
   address_id?: number; // If using saved address
 }
 

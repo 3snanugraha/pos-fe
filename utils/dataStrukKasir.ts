@@ -26,6 +26,13 @@ export type OrderStrukSumber = {
   status_pembayaran?: string | null;
   alamat_pengiriman?: string | null;
   catatan?: string | null;
+  /**
+   * Kolom pembayaran dari transaksi (backend mengisinya sejak checkout &
+   * verifikasi diperbaiki). Order lama masih 0 → struk membaca penanda
+   * `[Tunai: …]` di `catatan` sebagai cadangan.
+   */
+  jumlah_dibayar?: number | string | null;
+  kembalian?: number | string | null;
   total_harga?: number | null;
   subtotal?: number | null;
   total_diskon?: number | null;
@@ -75,6 +82,13 @@ export function siapkanDataStruk(
       status_pembayaran: order.status_pembayaran ?? null,
       alamat_pengiriman: order.alamat_pengiriman ?? null,
       catatan: order.catatan ?? null,
+      /**
+       * Diteruskan apa adanya: `susunBarisStruk` (`bacaPembayaran`) yang
+       * memutuskan sumber angka — kolom dulu, penanda `[Tunai: …]` sebagai
+       * cadangan data lama. Menyaring di sini berarti dua tempat memutuskan.
+       */
+      jumlah_dibayar: angka(order.jumlah_dibayar ?? 0),
+      kembalian: angka(order.kembalian ?? 0),
       subtotal: angka(order.subtotal ?? order.total_harga ?? 0),
       total_diskon: angka(order.total_diskon ?? 0),
       total_bayar: angka(order.total_bayar),

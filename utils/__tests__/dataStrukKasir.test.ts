@@ -86,7 +86,23 @@ test("alamat & catatan panjang tetap tercetak (dibungkus 32 kolom)", () => {
 
   const baris = teksStruk(data).split("\n");
   assert.ok(baris.some((b) => b.startsWith("Kirim ke:")));
-  assert.ok(baris.some((b) => b.startsWith("Catatan:")));
+
+  /*
+   * Asersi lama `startsWith("Catatan:")` DIGANTI dengan sengaja.
+   *
+   * Format yang diminta pemilik: label "Catatan :" berdiri sendiri, isi di
+   * baris berikutnya (mirip struk kasir). Format lama menempelkan label + isi
+   * satu baris, sehingga penanda pembayaran `[Tunai: …]` yang dulu tersimpan di
+   * catatan tampak menyatu dengan pesan pelanggan.
+   */
+  const indeksLabel = baris.indexOf("Catatan :");
+  assert.ok(indeksLabel > 0, `label \"Catatan :\" harus jadi baris sendiri:\n${baris.join("\n")}`);
+  assert.equal(
+    baris[indeksLabel + 1],
+    "Tolong dibungkus bubble wrap,",
+    "isi catatan harus mulai di baris setelah label"
+  );
+
   for (const b of baris) {
     assert.ok(b.length <= 32, `baris > 32 kolom: "${b}" (${b.length})`);
   }
